@@ -3,6 +3,7 @@ package com.rkb.client.gui;
 import com.rkb.client.gui.render.PanelRenderer;
 import com.rkb.client.gui.render.SidebarRenderer;
 import com.rkb.client.gui.widget.ModuleButton;
+import com.rkb.client.gui.widget.SearchBar;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -21,6 +22,7 @@ public class RKBClickGuiScreen extends Screen {
 
         PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
         SidebarRenderer.drawSidebar(guiGraphics, (this.width - 900) / 2, (this.height - 500) / 2);
+        SearchBar.draw(guiGraphics, 370, 55, 260, "");
         ModuleButton.draw(guiGraphics, 370, 90, 220, 36, "Zoom", zoomEnabled);
         ModuleButton.draw(guiGraphics, 370, 135, 220, 36, "FPS Display", fpsEnabled);
         ModuleButton.draw(guiGraphics, 370, 180, 220, 36, "Armor Status", false);
