@@ -32,12 +32,15 @@ public class SidebarRenderer {
         int y = panelY + 65;
 
         for (String category : CATEGORIES) {
+            if (category.equals("Home")) {
+                guiGraphics.fill(panelX + 8, y - 4, panelX + 155, y + 14, 0x3300A8FF);
+            }
             guiGraphics.drawString(
                     Minecraft.getInstance().font,
                     category,
                     panelX + 20,
                     y,
-                    0xFFFFFFFF,
+                    category.equals("Home") ? 0xFF00A8FF : 0xFFFFFFFF,
                     false
             );
             y += 24;

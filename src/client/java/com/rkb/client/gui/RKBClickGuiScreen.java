@@ -19,14 +19,16 @@ public class RKBClickGuiScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        int panelX = (this.width - 900) / 2;
+        int panelY = (this.height - 500) / 2;
 
-        PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
+        PanelRenderer.drawPanel(guiGraphics, panelX, panelY, 900, 500, 0xFF0B1220);
         SidebarRenderer.drawSidebar(guiGraphics, (this.width - 900) / 2, (this.height - 500) / 2);
         SearchBar.draw(guiGraphics, 370, 55, 260, "");
-        ModuleButton.draw(guiGraphics, 370, 90, 220, 36, "Zoom", zoomEnabled);
-        ModuleButton.draw(guiGraphics, 370, 135, 220, 36, "FPS Display", fpsEnabled);
-        ModuleButton.draw(guiGraphics, 370, 180, 220, 36, "Armor Status", false);
-        ModuleButton.draw(guiGraphics, 370, 225, 220, 36, "Motion Blur", true);
+        ModuleButton.draw(guiGraphics, panelX + 190, panelY + 50, 220, 36, "Zoom", zoomEnabled);
+        ModuleButton.draw(guiGraphics, panelX + 190, panelY + 95, 220, 36, "FPS Display", fpsEnabled);
+        ModuleButton.draw(guiGraphics, panelX + 190, panelY + 140, 220, 36, "Armor Status", false);
+        ModuleButton.draw(guiGraphics, panelX + 190, panelY + 185, 220, 36, "Motion Blur", true);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
