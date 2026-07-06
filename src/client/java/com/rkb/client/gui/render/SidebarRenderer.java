@@ -6,42 +6,41 @@ import net.minecraft.client.gui.GuiGraphics;
 public class SidebarRenderer {
 
     private static final String[] CATEGORIES = {
-            "Combat",
-            "Movement",
-            "Render",
-            "Player",
+            "Home",
+            "Gameplay",
+            "Visual",
             "HUD",
-            "World",
-            "Misc",
+            "Performance",
+            "Replay",
+            "Online",
             "Settings"
     };
 
-    public static void drawSidebar(GuiGraphics guiGraphics) {
+    public static void drawSidebar(GuiGraphics guiGraphics, int panelX, int panelY) {
 
-        guiGraphics.fill(60, 40, 220, 540, 0xFF08111E);
+        guiGraphics.fill(panelX, panelY, panelX + 170, panelY + 500, 0xFF08111E);
 
         guiGraphics.drawString(
                 Minecraft.getInstance().font,
                 "RKB CLIENT",
-                80,
-                60,
+                panelX + 20,
+                panelY + 20,
                 0xFF00A8FF,
                 true
         );
 
-        int y = 105;
+        int y = panelY + 65;
 
         for (String category : CATEGORIES) {
             guiGraphics.drawString(
                     Minecraft.getInstance().font,
                     category,
-                    80,
+                    panelX + 20,
                     y,
                     0xFFFFFFFF,
                     false
             );
-
-            y += 22;
+            y += 24;
         }
     }
 }

@@ -20,7 +20,7 @@ public class RKBClickGuiScreen extends Screen {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
 
         PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
-        SidebarRenderer.drawSidebar(guiGraphics);
+        SidebarRenderer.drawSidebar(guiGraphics, (this.width - 900) / 2, (this.height - 500) / 2);
         ModuleButton.draw(guiGraphics, 370, 90, 220, 36, "Zoom", zoomEnabled);
         ModuleButton.draw(guiGraphics, 370, 135, 220, 36, "FPS Display", fpsEnabled);
         ModuleButton.draw(guiGraphics, 370, 180, 220, 36, "Armor Status", false);
