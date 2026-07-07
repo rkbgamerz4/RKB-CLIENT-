@@ -16,7 +16,7 @@ public class SidebarRenderer {
             "Settings"
     };
 
-    public static void drawSidebar(GuiGraphics guiGraphics, int panelX, int panelY) {
+    public static void drawSidebar(GuiGraphics guiGraphics, int panelX, int panelY, String selectedCategory) {
 
         guiGraphics.fill(
                 panelX,
@@ -35,9 +35,11 @@ public class SidebarRenderer {
                 true
         );
 
-        int y = panelY + 65;        for (String category : CATEGORIES) {
+        int y = panelY + 65;
 
-            boolean selected = category.equals("Home");
+        for (String category : CATEGORIES) {
+            boolean selected = category.equals(selectedCategory);
+
 
             if (selected) {
                 guiGraphics.fill(
