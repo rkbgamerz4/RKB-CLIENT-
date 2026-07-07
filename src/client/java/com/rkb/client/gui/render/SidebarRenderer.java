@@ -18,31 +18,46 @@ public class SidebarRenderer {
 
     public static void drawSidebar(GuiGraphics guiGraphics, int panelX, int panelY) {
 
-        guiGraphics.fill(panelX, panelY, panelX + 170, panelY + 500, 0xFF08111E);
+        guiGraphics.fill(
+                panelX,
+                panelY,
+                panelX + 170,
+                panelY + 500,
+                UIColors.SIDEBAR
+        );
 
         guiGraphics.drawString(
                 Minecraft.getInstance().font,
                 "RKB CLIENT",
                 panelX + 20,
                 panelY + 20,
-                0xFF00A8FF,
+                UIColors.PRIMARY,
                 true
         );
 
-        int y = panelY + 65;
+        int y = panelY + 65;        for (String category : CATEGORIES) {
 
-        for (String category : CATEGORIES) {
-            if (category.equals("Home")) {
-                guiGraphics.fill(panelX + 8, y - 4, panelX + 155, y + 14, 0x3300A8FF);
+            boolean selected = category.equals("Home");
+
+            if (selected) {
+                guiGraphics.fill(
+                        panelX + 8,
+                        y - 4,
+                        panelX + 160,
+                        y + 14,
+                        0x3300A8FF
+                );
             }
+
             guiGraphics.drawString(
                     Minecraft.getInstance().font,
                     category,
                     panelX + 20,
                     y,
-                    category.equals("Home") ? 0xFF00A8FF : 0xFFFFFFFF,
+                    selected ? UIColors.PRIMARY : UIColors.TEXT,
                     false
             );
+
             y += 24;
         }
     }

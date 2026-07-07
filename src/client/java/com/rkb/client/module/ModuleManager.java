@@ -7,23 +7,23 @@ import java.util.List;
 
 public class ModuleManager {
 
-    private static final ModuleManager INSTANCE = new ModuleManager();
+    private static final List<Module> MODULES = new ArrayList<>();
 
-    public static ModuleManager getInstance() {
-        return INSTANCE;
+    static {
+        MODULES.add(new ZoomModule());
+
+        MODULES.add(new Module("FPS Display", ModuleCategory.HUD));
+        MODULES.add(new Module("Armor Status", ModuleCategory.HUD));
+        MODULES.add(new Module("Motion Blur", ModuleCategory.VISUAL));
     }
 
-    private final List<Module> modules = new ArrayList<>();
-
-    private ModuleManager() {
-        register(new ZoomModule());
+    public static List<Module> getModules() {
+        return MODULES;
     }
 
-    private void register(Module module) {
-        modules.add(module);
-    }
-
-    public List<Module> getModules() {
-        return modules;
+    public static List<Module> getModules(ModuleCategory category) {
+        return MODULES.stream()
+                .filter(module -> module.getCategory() == category)
+                .toList();
     }
 }

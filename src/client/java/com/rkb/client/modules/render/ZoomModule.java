@@ -1,21 +1,11 @@
 package com.rkb.client.modules.render;
 
-import com.rkb.client.module.Category;
 import com.rkb.client.module.Module;
+import com.rkb.client.module.ModuleCategory;
 
 public class ZoomModule extends Module {
 
     public ZoomModule() {
-        super("Zoom", Category.RENDER);
-    }
-
-    @Override
-    public void onEnable() {
-        System.out.println("Zoom Enabled");
-    }
-
-    @Override
-    public void onDisable() {
-        System.out.println("Zoom Disabled");
+        super("Zoom", ModuleCategory.VISUAL);
     }
 }

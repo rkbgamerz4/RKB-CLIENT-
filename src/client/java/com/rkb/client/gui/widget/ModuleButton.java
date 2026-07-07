@@ -1,6 +1,7 @@
 package com.rkb.client.gui.widget;
 
 import com.rkb.client.gui.render.ToggleRenderer;
+import com.rkb.client.gui.render.UIColors;
 import com.rkb.client.gui.util.RoundedRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,22 +18,26 @@ public class ModuleButton {
             boolean enabled
     ) {
 
-        int bg = enabled ? 0xFF101A2A : 0xFF151C28;
+        int bg = enabled ? UIColors.PANEL : 0xFF101722;
 
         RoundedRenderer.drawRoundedRect(g, x, y, w, h, bg);
+
+        if (enabled) {
+            g.fill(x, y, x + 3, y + h, UIColors.PRIMARY);
+        }
 
         g.drawString(
                 Minecraft.getInstance().font,
                 name,
-                x + 12,
-                y + 11,
-                0xFFFFFFFF,
+                x + 14,
+                y + 12,
+                UIColors.TEXT,
                 false
         );
 
         ToggleRenderer.draw(
                 g,
-                x + w - 46,
+                x + w - 48,
                 y + 10,
                 enabled
         );
