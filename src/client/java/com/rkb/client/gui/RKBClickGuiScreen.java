@@ -10,8 +10,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class RKBClickGuiScreen extends Screen {
-    private boolean zoomEnabled = true;
-    private boolean fpsEnabled = true;
 
     public RKBClickGuiScreen() {
         super(Component.literal("RKB Client"));
@@ -51,14 +49,6 @@ public class RKBClickGuiScreen extends Screen {
                 return true;
             }
             moduleY += 45;
-        }
-        if (mouseX >= 250 && mouseX <= 470 && mouseY >= 90 && mouseY <= 126) {
-            zoomEnabled = !zoomEnabled;
-            return true;
-        }
-        if (mouseX >= 250 && mouseX <= 470 && mouseY >= 135 && mouseY <= 171) {
-            fpsEnabled = !fpsEnabled;
-            return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
