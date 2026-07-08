@@ -21,10 +21,11 @@ public class RKBClickGuiScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         int panelX = (this.width - 900) / 2;
+
         int panelY = (this.height - 500) / 2;
 
         PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
-        SidebarRenderer.drawSidebar(guiGraphics, panelX, panelY, "Home");
+        SidebarRenderer.drawSidebar(guiGraphics, panelX, panelY, selectedCategory.name().substring(0,1) + selectedCategory.name().substring(1).toLowerCase());
 
         int moduleY = panelY + 50;
 
@@ -43,6 +44,23 @@ public class RKBClickGuiScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         int panelY = (this.height - 500) / 2;
+        int panelX = (this.width - 900) / 2;
+
+        if (mouseX >= panelX && mouseX <= panelX + 170) {
+            int index = (int)((mouseY - (panelY + 65)) / 24);
+            if (index >= 0 && index < ModuleCategory.values().length) {
+                selectedCategory = ModuleCategory.values()[index];
+                return true;
+            }
+        }
+
+        if (mouseX >= panelX && mouseX <= panelX + 170) {
+            int index = (int)((mouseY - (panelY + 65)) / 24);
+            if (index >= 0 && index < ModuleCategory.values().length) {
+                selectedCategory = ModuleCategory.values()[index];
+                return true;
+            }
+        }
         int moduleY = panelY + 50;
 
         for (Module module : ModuleManager.getModules(selectedCategory)) {
