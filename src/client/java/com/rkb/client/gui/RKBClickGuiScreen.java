@@ -5,11 +5,13 @@ import com.rkb.client.gui.render.SidebarRenderer;
 import com.rkb.client.gui.widget.ModuleButton;
 import com.rkb.client.module.Module;
 import com.rkb.client.module.ModuleManager;
+import com.rkb.client.module.ModuleCategory;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class RKBClickGuiScreen extends Screen {
+    private ModuleCategory selectedCategory = ModuleCategory.HOME;
 
     public RKBClickGuiScreen() {
         super(Component.literal("RKB Client"));
@@ -26,7 +28,7 @@ public class RKBClickGuiScreen extends Screen {
 
         int moduleY = panelY + 50;
 
-        for (Module module : ModuleManager.getModules()) {
+        for (Module module : ModuleManager.getModules(selectedCategory)) {
             ModuleButton.draw(guiGraphics, panelX + 190, moduleY, 220, 36, module.getName(), module.isEnabled());
             moduleY += 45;
         }
@@ -43,7 +45,7 @@ public class RKBClickGuiScreen extends Screen {
         int panelY = (this.height - 500) / 2;
         int moduleY = panelY + 50;
 
-        for (Module module : ModuleManager.getModules()) {
+        for (Module module : ModuleManager.getModules(selectedCategory)) {
             if (mouseX >= 190 && mouseX <= 410 && mouseY >= moduleY && mouseY <= moduleY + 36) {
                 module.toggle();
                 return true;
