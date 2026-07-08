@@ -42,6 +42,16 @@ public class RKBClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        int panelY = (this.height - 500) / 2;
+        int moduleY = panelY + 50;
+
+        for (Module module : ModuleManager.getModules()) {
+            if (mouseX >= 190 && mouseX <= 410 && mouseY >= moduleY && mouseY <= moduleY + 36) {
+                module.toggle();
+                return true;
+            }
+            moduleY += 45;
+        }
         if (mouseX >= 250 && mouseX <= 470 && mouseY >= 90 && mouseY <= 126) {
             zoomEnabled = !zoomEnabled;
             return true;
