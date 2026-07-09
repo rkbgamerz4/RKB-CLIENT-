@@ -54,13 +54,6 @@ public class RKBClickGuiScreen extends Screen {
             }
         }
 
-        if (mouseX >= panelX && mouseX <= panelX + 170) {
-            int index = (int)((mouseY - (panelY + 65)) / 24);
-            if (index >= 0 && index < ModuleCategory.values().length) {
-                selectedCategory = ModuleCategory.values()[index];
-                return true;
-            }
-        }
         int moduleY = panelY + 50;
 
         for (Module module : ModuleManager.getModules(selectedCategory)) {
