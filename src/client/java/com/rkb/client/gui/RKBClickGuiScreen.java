@@ -3,6 +3,7 @@ package com.rkb.client.gui;
 import com.rkb.client.gui.render.PanelRenderer;
 import com.rkb.client.gui.render.SidebarRenderer;
 import com.rkb.client.gui.widget.ModuleButton;
+import com.rkb.client.gui.widget.SearchBar;
 import com.rkb.client.module.Module;
 import com.rkb.client.module.ModuleManager;
 import com.rkb.client.module.ModuleCategory;
@@ -26,6 +27,8 @@ public class RKBClickGuiScreen extends Screen {
 
         PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
         SidebarRenderer.drawSidebar(guiGraphics, panelX, panelY, selectedCategory.name().substring(0,1) + selectedCategory.name().substring(1).toLowerCase());
+
+        SearchBar.draw(guiGraphics, panelX + 190, panelY + 15, 250, "");
 
         int moduleY = panelY + 50;
 
