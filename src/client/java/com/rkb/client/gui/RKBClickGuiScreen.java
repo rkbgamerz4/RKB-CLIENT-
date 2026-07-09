@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 
 public class RKBClickGuiScreen extends Screen {
     private ModuleCategory selectedCategory = ModuleCategory.HOME;
+    private String searchText = "";
 
     public RKBClickGuiScreen() {
         super(Component.literal("RKB Client"));
@@ -28,11 +29,14 @@ public class RKBClickGuiScreen extends Screen {
         PanelRenderer.drawPanel(guiGraphics, 180, 40, 900, 500, 0xFF0B1220);
         SidebarRenderer.drawSidebar(guiGraphics, panelX, panelY, selectedCategory.name().substring(0,1) + selectedCategory.name().substring(1).toLowerCase());
 
-        SearchBar.draw(guiGraphics, panelX + 190, panelY + 15, 250, "");
+        SearchBar.draw(guiGraphics, panelX + 190, panelY + 15, 250, searchText);
 
         int moduleY = panelY + 50;
 
         for (Module module : ModuleManager.getModules(selectedCategory)) {
+            if (!searchText.isEmpty() && !module.getName().toLowerCase().contains(searchText.toLowerCase())) {
+                continue;
+            }
             ModuleButton.draw(guiGraphics, panelX + 190, moduleY, 220, 36, module.getName(), module.isEnabled());
             moduleY += 45;
         }
@@ -60,6 +64,9 @@ public class RKBClickGuiScreen extends Screen {
         int moduleY = panelY + 50;
 
         for (Module module : ModuleManager.getModules(selectedCategory)) {
+            if (!searchText.isEmpty() && !module.getName().toLowerCase().contains(searchText.toLowerCase())) {
+                continue;
+            }
             if (mouseX >= 190 && mouseX <= 410 && mouseY >= moduleY && mouseY <= moduleY + 36) {
                 module.toggle();
                 return true;
@@ -69,4 +76,18 @@ public class RKBClickGuiScreen extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
+
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 259 && !searchText.isEmpty()) {
+            searchText = searchText.substring(0, searchText.length() - 1);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+    public boolean charTyped(char chr, int modifiers) {
+        searchText += chr;
+        return true;
+    }
 }
