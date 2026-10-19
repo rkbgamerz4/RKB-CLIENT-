@@ -26,7 +26,7 @@ public class InterfaceModule extends Module {
     public InterfaceModule() {
         super("interface", "Interface",
                 "Menu look, HUD style, and the menu key (click the key button to rebind).", Category.UTILITY);
-        setKeyCode(GLFW.GLFW_KEY_RIGHT_SHIFT);
+        defaultKey(GLFW.GLFW_KEY_RIGHT_SHIFT);
     }
 
     @Override
@@ -38,11 +38,6 @@ public class InterfaceModule extends Module {
     @Override
     public void setKeyCode(int key) {
         super.setKeyCode(KeyUtil.isValid(key) ? key : GLFW.GLFW_KEY_RIGHT_SHIFT);
-    }
-
-    @Override
-    public int effectiveKey() {
-        return KeyUtil.isValid(keyCode()) ? keyCode() : GLFW.GLFW_KEY_RIGHT_SHIFT;
     }
 
     @Override

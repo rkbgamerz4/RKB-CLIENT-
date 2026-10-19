@@ -3,6 +3,7 @@ package com.rkb.client;
 import com.rkb.client.config.ConfigManager;
 import com.rkb.client.gui.RkbMenuScreen;
 import com.rkb.client.hud.HudRenderer;
+import com.rkb.client.input.KeybindRegistry;
 import com.rkb.client.module.ModuleManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -25,6 +26,7 @@ public class RkbClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ModuleManager.init();
+        KeybindRegistry.registerAll(ModuleManager.get());
         ConfigManager.load();
         HudRenderer.init();
 
@@ -50,20 +52,30 @@ public class RkbClient implements ClientModInitializer {
         menuRequested = true;
     }
 
+    private static int tickErrors = 0;
+
     private static void onTick(MinecraftClient mc) {
         if (mc.options == null) {
             return;
         }
-        ModuleManager manager = ModuleManager.get();
-        if (!started) {
-            started = true;
-            manager.activateLoaded(mc);
-        }
-        manager.tick(mc);
-        manager.pollKeys(mc);
-        if (menuRequested && mc.currentScreen == null) {
+        try {
+            ModuleManager manager = ModuleManager.get();
+            if (!started) {
+                started = true;
+                KeybindRegistry.reapplyPinnedKeys();
+                manager.activateLoaded(mc);
+            }
+            manager.tick(mc);
+            KeybindRegistry.tick(mc);
+            if (menuRequested && mc.currentScreen == null) {
+                menuRequested = false;
+                mc.setScreen(new RkbMenuScreen());
+            }
+        } catch (Throwable t) {
             menuRequested = false;
-            mc.setScreen(new RkbMenuScreen());
+            if (tickErrors++ < 5) {
+                LOGGER.error("RKB CLIENT tick failed (contained, game continues)", t);
+            }
         }
     }
 }

@@ -1,10 +1,13 @@
 package com.rkb.client.input;
 
+import com.rkb.client.RkbClient;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /** GLFW key helpers. Keybinds are stored as raw GLFW key codes (-1 = unbound). */
 public final class KeyUtil {
@@ -13,6 +16,9 @@ public final class KeyUtil {
     public static final int LAST_KEY = GLFW.GLFW_KEY_LAST;
 
     private static final Map<Integer, String> NAMES = new HashMap<>();
+    /** Keys whose GLFW read threw (e.g. emulated GLFW on Android has a smaller key table). */
+    private static final Set<Integer> BAD_KEYS = new HashSet<>();
+    private static boolean mouseBroken = false;
 
     static {
         NAMES.put(GLFW.GLFW_KEY_SPACE, "Space");
@@ -68,17 +74,29 @@ public final class KeyUtil {
     }
 
     public static boolean isDown(MinecraftClient mc, int key) {
-        if (!isValid(key) || mc == null || mc.getWindow() == null) {
+        if (!isValid(key) || mc == null || mc.getWindow() == null || BAD_KEYS.contains(key)) {
             return false;
         }
-        return GLFW.glfwGetKey(mc.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
+        try {
+            return GLFW.glfwGetKey(mc.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
+        } catch (RuntimeException e) {
+            BAD_KEYS.add(key);
+            RkbClient.LOGGER.warn("GLFW key {} cannot be read on this platform ({}); ignoring it.", key, e.toString());
+            return false;
+        }
     }
 
     public static boolean isMouseDown(MinecraftClient mc, int button) {
-        if (mc == null || mc.getWindow() == null) {
+        if (mouseBroken || mc == null || mc.getWindow() == null) {
             return false;
         }
-        return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), button) == GLFW.GLFW_PRESS;
+        try {
+            return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), button) == GLFW.GLFW_PRESS;
+        } catch (RuntimeException e) {
+            mouseBroken = true;
+            RkbClient.LOGGER.warn("GLFW mouse polling failed on this platform ({}); disabled.", e.toString());
+            return false;
+        }
     }
 
     public static String name(int key) {

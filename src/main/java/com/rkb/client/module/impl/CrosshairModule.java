@@ -2,7 +2,6 @@ package com.rkb.client.module.impl;
 
 import com.rkb.client.module.Category;
 import com.rkb.client.module.Module;
-import com.rkb.client.module.ModuleManager;
 import com.rkb.client.module.setting.BoolSetting;
 import com.rkb.client.module.setting.ChoiceSetting;
 import com.rkb.client.module.setting.IntSetting;
@@ -24,13 +23,16 @@ public class CrosshairModule extends Module {
     private final BoolSetting outline = add(new BoolSetting("outline", "Outline", true));
     private final BoolSetting hideVanilla = add(new BoolSetting("hide_vanilla", "Hide vanilla crosshair", true));
 
+    private static CrosshairModule instance;
+
     public CrosshairModule() {
         super("crosshair", "Custom Crosshair", "Replaces the vanilla crosshair with your own style.", Category.VISUAL);
+        instance = this;
     }
 
     /** Used by the InGameHud mixin. */
     public static boolean shouldHideVanilla() {
-        CrosshairModule m = ModuleManager.get().byType(CrosshairModule.class);
+        CrosshairModule m = instance;
         return m != null && m.isEnabled() && m.hideVanilla.on();
     }
 

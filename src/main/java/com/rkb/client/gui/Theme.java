@@ -22,7 +22,7 @@ public final class Theme {
     }
 
     private static InterfaceModule ui() {
-        return ModuleManager.get().byType(InterfaceModule.class);
+        return ModuleManager.get().ui();
     }
 
     public static int accent() {

@@ -3,6 +3,7 @@ package com.rkb.client.gui;
 import com.rkb.client.VersionInfo;
 import com.rkb.client.config.ConfigManager;
 import com.rkb.client.input.KeyUtil;
+import com.rkb.client.input.KeybindRegistry;
 import com.rkb.client.module.Category;
 import com.rkb.client.module.Module;
 import com.rkb.client.module.ModuleManager;
@@ -16,6 +17,8 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.option.KeyBinding;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -46,7 +49,6 @@ public class RkbMenuScreen extends Screen {
 
     private final List<Hit> hits = new ArrayList<>();
     private final Set<String> expanded = new HashSet<>();
-    private final boolean[] prevKeys = new boolean[KeyUtil.LAST_KEY + 1];
 
     private TextFieldWidget search;
     private Module listening;
@@ -90,7 +92,6 @@ public class RkbMenuScreen extends Screen {
         search.setText(previous);
         addSelectableChild(search);
 
-        snapshotKeys(mc);
         mouseWasDown = KeyUtil.isMouseDown(mc, GLFW.GLFW_MOUSE_BUTTON_LEFT);
     }
 
@@ -113,10 +114,37 @@ public class RkbMenuScreen extends Screen {
 
     // ------------------------------------------------------------------ input
 
-    private void snapshotKeys(MinecraftClient mc) {
-        for (int k = KeyUtil.FIRST_KEY; k <= KeyUtil.LAST_KEY; k++) {
-            prevKeys[k] = KeyUtil.isDown(mc, k);
+    /** Event-driven keys: keybind capture, menu key to close, arrow scrolling. No GLFW polling. */
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        if (listening != null) {
+            int k = input.key();
+            if (k == GLFW.GLFW_KEY_BACKSPACE || k == GLFW.GLFW_KEY_DELETE) {
+                listening.setKeyCode(KeyUtil.UNBOUND);
+            } else if (!input.isEscape()) {
+                listening.setKeyCode(k);
+            }
+            listening = null;
+            ConfigManager.save();
+            return true;
         }
+        if (!search.isFocused()) {
+            KeyBinding menuKey = KeybindRegistry.bindingOf(ModuleManager.get().ui());
+            if (menuKey != null && menuKey.matchesKey(input)) {
+                closing = true;
+                MinecraftClient.getInstance().setScreen(null);
+                return true;
+            }
+            if (input.isUp()) {
+                scroll -= 18;
+                return true;
+            }
+            if (input.isDown()) {
+                scroll += 18;
+                return true;
+            }
+        }
+        return super.keyPressed(input);
     }
 
     private boolean inList(int mx, int my) {
@@ -124,42 +152,6 @@ public class RkbMenuScreen extends Screen {
     }
 
     private void handleInput(MinecraftClient mc, int mx, int my) {
-        if (listening != null) {
-            for (int k = KeyUtil.FIRST_KEY; k <= KeyUtil.LAST_KEY; k++) {
-                boolean down = KeyUtil.isDown(mc, k);
-                if (down && !prevKeys[k]) {
-                    if (k == GLFW.GLFW_KEY_BACKSPACE || k == GLFW.GLFW_KEY_DELETE) {
-                        listening.setKeyCode(KeyUtil.UNBOUND);
-                    } else if (k != GLFW.GLFW_KEY_ESCAPE) {
-                        listening.setKeyCode(k);
-                    }
-                    listening = null;
-                    ConfigManager.save();
-                    snapshotKeys(mc);
-                    break;
-                }
-                prevKeys[k] = down;
-            }
-        } else {
-            InterfaceModule ui = ModuleManager.get().byType(InterfaceModule.class);
-            int menuKey = ui == null ? GLFW.GLFW_KEY_RIGHT_SHIFT : ui.effectiveKey();
-            boolean menuDown = KeyUtil.isDown(mc, menuKey);
-            if (menuDown && !prevKeys[menuKey] && !search.isFocused()) {
-                closing = true;
-                mc.setScreen(null);
-                return;
-            }
-            prevKeys[menuKey] = menuDown;
-            if (!search.isFocused()) {
-                if (KeyUtil.isDown(mc, GLFW.GLFW_KEY_UP)) {
-                    scroll -= 6;
-                }
-                if (KeyUtil.isDown(mc, GLFW.GLFW_KEY_DOWN)) {
-                    scroll += 6;
-                }
-            }
-        }
-
         boolean down = KeyUtil.isMouseDown(mc, GLFW.GLFW_MOUSE_BUTTON_LEFT);
         if (down && !mouseWasDown) {
             pressY = my;
@@ -402,7 +394,6 @@ public class RkbMenuScreen extends Screen {
                 listening = null;
             } else {
                 listening = m;
-                snapshotKeys(MinecraftClient.getInstance());
             }
         }));
         yy += SUB_H;

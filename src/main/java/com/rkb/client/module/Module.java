@@ -4,7 +4,10 @@ import com.rkb.client.RkbClient;
 import com.rkb.client.input.KeyUtil;
 import com.rkb.client.module.setting.Setting;
 import net.minecraft.client.MinecraftClient;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,7 +26,10 @@ public abstract class Module {
     private boolean enabled;
     /** True once onEnable() has run for the current enabled state. */
     private boolean active;
+    /** Default key until a binding is attached; afterwards the last key set through setKeyCode(). */
     private int keyCode = KeyUtil.UNBOUND;
+    private KeyBinding binding;
+    private boolean keyPinned;
     private int failures;
 
     protected Module(String id, String name, String description, Category category) {
@@ -69,17 +75,48 @@ public abstract class Module {
         return enabled || !isToggleable();
     }
 
+    /** Declares the default key; call from the subclass constructor only. */
+    protected final void defaultKey(int key) {
+        this.keyCode = key;
+    }
+
+    /** Default key, valid only before the vanilla key binding is attached. */
+    public final int defaultKeyCode() {
+        return keyCode;
+    }
+
+    public final void attachBinding(KeyBinding binding) {
+        this.binding = binding;
+    }
+
+    /** Current key. Reads the vanilla key binding so rebinding in Options > Controls is respected. */
     public final int keyCode() {
+        if (binding != null) {
+            return binding.isUnbound() ? KeyUtil.UNBOUND : KeyBindingHelper.getBoundKeyOf(binding).getCode();
+        }
         return keyCode;
     }
 
     public void setKeyCode(int key) {
-        this.keyCode = KeyUtil.isValid(key) ? key : KeyUtil.UNBOUND;
+        int k = KeyUtil.isValid(key) ? key : KeyUtil.UNBOUND;
+        this.keyCode = k;
+        this.keyPinned = true;
+        applyKey(k);
     }
 
-    /** Key actually polled; subclasses may force a fallback. */
-    public int effectiveKey() {
-        return keyCode;
+    /** Re-applies a key from the config file (options.txt may be read after mod init). */
+    public final void reapplyPinnedKey() {
+        if (keyPinned) {
+            applyKey(keyCode);
+        }
+    }
+
+    private void applyKey(int k) {
+        if (binding == null) {
+            return;
+        }
+        binding.setBoundKey(InputUtil.Type.KEYSYM.createFromCode(k));
+        KeyBinding.updateKeysByCode();
     }
 
     /** Modules that return false are always on and cannot be switched off. */

@@ -1,11 +1,12 @@
 package com.rkb.client.hud;
 
-import com.rkb.client.RkbClient;
 import com.rkb.client.module.Module;
 import com.rkb.client.module.ModuleManager;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+
+import java.util.List;
 
 /** Hooks Fabric's HUD callback and lets each enabled module draw itself. */
 public final class HudRenderer {
@@ -21,16 +22,12 @@ public final class HudRenderer {
         if (mc == null || mc.options == null || mc.getWindow() == null) {
             return;
         }
-        try {
-            ModuleManager.get().pollKeys(mc);
-        } catch (Throwable t) {
-            RkbClient.LOGGER.error("Key polling failed", t);
-        }
         if (mc.options.hudHidden) {
             return;
         }
-        for (Module m : ModuleManager.get().all()) {
-            m.renderSafe(context, mc);
+        List<Module> mods = ModuleManager.get().all();
+        for (int i = 0, n = mods.size(); i < n; i++) {
+            mods.get(i).renderSafe(context, mc);
         }
     }
 }

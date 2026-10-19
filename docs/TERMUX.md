@@ -15,7 +15,7 @@ git pull                                   # get latest changes
 # local build attempt (optional, may run out of memory):
 bash scripts/bootstrap-wrapper.sh          # needs Gradle installed once
 ./gradlew build
-ls build/libs/                             # rkbclient-0.1.0.jar is the one to install
+ls build/libs/                             # rkbclient-0.1.1.jar is the one to install
 
 git add -A
 git commit -m "Describe your change"

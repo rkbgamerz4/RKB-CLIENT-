@@ -39,7 +39,7 @@ cleared.
 bash scripts/bootstrap-wrapper.sh   # once: creates gradlew + wrapper jar (binary files not in the ZIP)
 java -version                       # 21
 ./gradlew build
-ls build/libs                       # use rkbclient-0.1.0.jar (not -sources)
+ls build/libs                       # use rkbclient-0.1.1.jar (not -sources)
 ```
 Test in dev: `./gradlew runClient`. CI: `.github/workflows/build.yml` builds on every push and uploads the JAR.
 
@@ -61,7 +61,9 @@ automatically.
   `KeyUtil`, `TextFieldWidget.setPlaceholder` in `RkbMenuScreen`.
 - The crosshair-hiding mixin targets `InGameHud.renderCrosshair` with `require = 0`: if the name is wrong the game still
   starts, but the vanilla crosshair stays visible next to the custom one.
-- Input uses GLFW polling instead of Minecraft's input events (keeps it independent of 1.21.9+ input API changes).
+- Keys use Minecraft's own key bindings (confirmed against the 1.21.11 Yarn javadoc). Two calls are assumed, not checked:
+  `KeyBindingHelper.getBoundKeyOf` and `InputUtil.Key.getCode()` in `Module.keyCode()`.
+- The mouse is still read via one guarded `glfwGetMouseButton` call per frame.
 
 ## Licence
 MIT, see `LICENSE`.

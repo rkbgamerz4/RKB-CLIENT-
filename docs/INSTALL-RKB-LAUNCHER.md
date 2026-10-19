@@ -12,12 +12,12 @@ Fabric 1.21.11 profile.
 | Java | 21 | Launcher runtime (`.../runtime/java21/bin/java`) |
 
 ## Steps
-1. Build the JAR (see README) and copy `build/libs/rkbclient-0.1.0.jar` to your phone. Do **not** use the `-sources` JAR.
+1. Build the JAR (see README) and copy `build/libs/rkbclient-0.1.1.jar` to your phone. Do **not** use the `-sources` JAR.
 2. Install Fabric for 1.21.11 in the launcher (create a Fabric profile). If the launcher has no Fabric installer yet,
    install it with the official Fabric installer on a PC and copy the resulting version folder into the launcher's
    `versions` directory.
 3. Find the game directory used by that profile and open (or create) its `mods` folder.
-4. Put these two files in `mods`: `rkbclient-0.1.0.jar` and the Fabric API JAR for 1.21.11 (download from Modrinth).
+4. Put these two files in `mods`: `rkbclient-0.1.1.jar` and the Fabric API JAR for 1.21.11 (download from Modrinth).
 5. Select the Fabric 1.21.11 profile in RKB LAUNCHER and press Play.
 6. In game, press **Right Shift** or type **/rkb** in chat to open the menu. On Android, `/rkb` is the easiest route;
    alternatively map a touch button to Right Shift in the launcher's controls, if it has that option.

@@ -1,0 +1,14 @@
+{
+  "key.category.rkbclient.main": "RKB CLIENT",
+  "key.rkbclient.crosshair": "Custom Crosshair",
+  "key.rkbclient.fps": "FPS Display",
+  "key.rkbclient.memory": "Memory Usage",
+  "key.rkbclient.clock": "Clock",
+  "key.rkbclient.cps": "CPS Counter",
+  "key.rkbclient.coordinates": "Coordinates",
+  "key.rkbclient.zoom": "Zoom",
+  "key.rkbclient.keystrokes": "Keystrokes",
+  "key.rkbclient.interface": "Interface",
+  "key.rkbclient.info_hud": "Info HUD",
+  "key.rkbclient.toggle_sprint": "Toggle Sprint"
+}

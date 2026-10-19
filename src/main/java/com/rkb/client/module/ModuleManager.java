@@ -1,6 +1,5 @@
 package com.rkb.client.module;
 
-import com.rkb.client.input.KeyUtil;
 import com.rkb.client.module.impl.ClockModule;
 import com.rkb.client.module.impl.CoordinatesModule;
 import com.rkb.client.module.impl.CpsModule;
@@ -15,7 +14,7 @@ import com.rkb.client.module.impl.ZoomModule;
 import net.minecraft.client.MinecraftClient;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +24,9 @@ public final class ModuleManager {
     private static ModuleManager instance;
 
     private final Map<String, Module> modules = new LinkedHashMap<>();
-    private final boolean[] previousDown = new boolean[KeyUtil.LAST_KEY + 1];
+    private List<Module> allCache = List.of();
+    private final Map<Category, List<Module>> byCategory = new EnumMap<>(Category.class);
+    private InterfaceModule ui;
 
     private ModuleManager() {
     }
@@ -46,6 +47,7 @@ public final class ModuleManager {
         instance.register(new InterfaceModule());
         instance.register(new CpsModule());
         instance.register(new ToggleSprintModule());
+        instance.freeze();
     }
 
     public static ModuleManager get() {
@@ -61,18 +63,32 @@ public final class ModuleManager {
         }
     }
 
+    /** Builds immutable lookup caches once, so per-frame callers never allocate. */
+    private void freeze() {
+        allCache = List.copyOf(modules.values());
+        for (Category c : Category.values()) {
+            List<Module> l = new ArrayList<>();
+            for (Module m : allCache) {
+                if (m.category() == c) {
+                    l.add(m);
+                }
+            }
+            byCategory.put(c, List.copyOf(l));
+        }
+        ui = byType(InterfaceModule.class);
+    }
+
     public List<Module> all() {
-        return Collections.unmodifiableList(new ArrayList<>(modules.values()));
+        return allCache;
     }
 
     public List<Module> inCategory(Category category) {
-        List<Module> out = new ArrayList<>();
-        for (Module m : modules.values()) {
-            if (m.category() == category) {
-                out.add(m);
-            }
-        }
-        return out;
+        return byCategory.getOrDefault(category, List.of());
+    }
+
+    /** Cached interface settings module (never null after init). */
+    public InterfaceModule ui() {
+        return ui;
     }
 
     public Module byId(String id) {
@@ -90,55 +106,20 @@ public final class ModuleManager {
     }
 
     public void activateLoaded(MinecraftClient mc) {
-        for (Module m : modules.values()) {
+        for (Module m : allCache) {
             m.activateIfNeeded(mc);
         }
     }
 
     public void tick(MinecraftClient mc) {
-        for (Module m : modules.values()) {
+        for (Module m : allCache) {
             m.tickSafe(mc);
         }
     }
 
     public void shutdown(MinecraftClient mc) {
-        for (Module m : modules.values()) {
+        for (Module m : allCache) {
             m.shutdown();
-        }
-    }
-
-    /**
-     * Edge-detects bound keys. Safe to call several times per frame; keys only fire when
-     * the player is in-world with no screen open.
-     */
-    public void pollKeys(MinecraftClient mc) {
-        if (mc == null || mc.getWindow() == null) {
-            return;
-        }
-        boolean free = mc.currentScreen == null;
-        List<Module> fired = new ArrayList<>();
-        for (Module m : modules.values()) {
-            int key = m.effectiveKey();
-            if (!KeyUtil.isValid(key)) {
-                continue;
-            }
-            boolean down = KeyUtil.isDown(mc, key);
-            if (down && !previousDown[key] && free) {
-                fired.add(m);
-            }
-        }
-        for (Module m : modules.values()) {
-            int key = m.effectiveKey();
-            if (KeyUtil.isValid(key)) {
-                previousDown[key] = KeyUtil.isDown(mc, key);
-            }
-        }
-        for (Module m : fired) {
-            try {
-                m.onKeyPressed(mc);
-            } catch (Throwable t) {
-                com.rkb.client.RkbClient.LOGGER.error("Keybind action for '{}' failed", m.id(), t);
-            }
         }
     }
 }
