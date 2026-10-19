@@ -1,0 +1,46 @@
+# MANUAL ONLY. Nothing is published unless you start this workflow yourself and type PUBLISH.
+# Before first use: create the Modrinth project, then add repository secret MODRINTH_TOKEN and
+# repository variable MODRINTH_ID. The action version below was not verified from this environment;
+# check https://github.com/Kir-Antipov/mc-publish for the current release and inputs.
+name: Publish to Modrinth
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUBLISH to confirm"
+        required: true
+      version_type:
+        description: "release, beta or alpha"
+        required: true
+        default: beta
+
+jobs:
+  publish:
+    if: ${{ inputs.confirm == 'PUBLISH' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.2.0
+      - name: Build
+        run: |
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew build; else gradle build; fi
+      - name: Publish
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: false
+          files: |
+            build/libs/rkbclient-*[0-9].jar
+          loaders: fabric
+          game-versions: 1.21.11
+          java: 21
+          version-type: ${{ inputs.version_type }}
+          changelog-file: docs/RELEASE_NOTES.md

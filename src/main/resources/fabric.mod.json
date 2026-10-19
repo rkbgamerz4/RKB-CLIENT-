@@ -1,38 +1,22 @@
 {
-	"schemaVersion": 1,
-	"id": "rkbclient",
-	"version": "${version}",
-	"name": "RKB Client",
-	"description": "This is an example description! Tell everyone what your mod is about!",
-	"authors": [
-		"RKB_GAMERZ"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
-	"icon": "assets/rkbclient/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"com.rkb.client.RKBClient"
-		],
-		"client": [
-			"com.rkb.client.RKBClientClient"
-		]
-	},
-	"mixins": [
-		"rkbclient.mixins.json",
-		{
-			"config": "rkbclient.client.mixins.json",
-			"environment": "client"
-		}
-	],
-	"depends": {
-		"fabricloader": ">=0.19.3",
-		"minecraft": "~1.21.1",
-		"java": ">=21",
-		"fabric-api": "*"
-	}
+  "schemaVersion": 1,
+  "id": "rkbclient",
+  "version": "${version}",
+  "name": "RKB CLIENT",
+  "description": "Client-side Fabric mod with an in-game module menu, HUD modules and JSON config. Built for RKB LAUNCHER.",
+  "authors": ["RKB"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/rkbclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.rkb.client.RkbClient"]
+  },
+  "mixins": ["rkbclient.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.2",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
 }
