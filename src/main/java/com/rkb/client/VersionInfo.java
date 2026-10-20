@@ -6,6 +6,7 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class VersionInfo {
     private static String minecraft;
     private static String mod;
+    private static String loader;
 
     private VersionInfo() {
     }
@@ -17,6 +18,15 @@ public final class VersionInfo {
                     .orElse("unknown");
         }
         return minecraft;
+    }
+
+    public static String loader() {
+        if (loader == null) {
+            loader = FabricLoader.getInstance().getModContainer("fabricloader")
+                    .map(c -> c.getMetadata().getVersion().getFriendlyString())
+                    .orElse("unknown");
+        }
+        return loader;
     }
 
     public static String mod() {

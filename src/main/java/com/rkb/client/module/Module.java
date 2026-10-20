@@ -3,8 +3,8 @@ package com.rkb.client.module;
 import com.rkb.client.RkbClient;
 import com.rkb.client.input.KeyUtil;
 import com.rkb.client.module.setting.Setting;
-import net.minecraft.client.MinecraftClient;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
@@ -12,6 +12,7 @@ import net.minecraft.client.util.InputUtil;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 /** Base class for every RKB CLIENT module. */
 public abstract class Module {
@@ -22,12 +23,15 @@ public abstract class Module {
     private final String description;
     private final Category category;
     private final List<Setting<?>> settings = new ArrayList<>();
+    private final List<KeyAction> actions = new ArrayList<>();
 
     private boolean enabled;
+    private boolean defaultEnabled;
     /** True once onEnable() has run for the current enabled state. */
     private boolean active;
-    /** Default key until a binding is attached; afterwards the last key set through setKeyCode(). */
+    /** Last key set through setKeyCode(); only authoritative while no binding is attached. */
     private int keyCode = KeyUtil.UNBOUND;
+    private int defaultKeyValue = KeyUtil.UNBOUND;
     private KeyBinding binding;
     private boolean keyPinned;
     private int failures;
@@ -49,6 +53,14 @@ public abstract class Module {
         });
         settings.add(setting);
         return setting;
+    }
+
+    protected final void addAction(String id, String name, Consumer<MinecraftClient> run) {
+        actions.add(new KeyAction(id, name, run));
+    }
+
+    public final List<KeyAction> actions() {
+        return Collections.unmodifiableList(actions);
     }
 
     public final String id() {
@@ -75,14 +87,16 @@ public abstract class Module {
         return enabled || !isToggleable();
     }
 
+    // ------------------------------------------------------------------ keys
+
     /** Declares the default key; call from the subclass constructor only. */
     protected final void defaultKey(int key) {
         this.keyCode = key;
+        this.defaultKeyValue = key;
     }
 
-    /** Default key, valid only before the vanilla key binding is attached. */
     public final int defaultKeyCode() {
-        return keyCode;
+        return defaultKeyValue;
     }
 
     public final void attachBinding(KeyBinding binding) {
@@ -119,6 +133,8 @@ public abstract class Module {
         KeyBinding.updateKeysByCode();
     }
 
+    // ------------------------------------------------------------------ state
+
     /** Modules that return false are always on and cannot be switched off. */
     public boolean isToggleable() {
         return true;
@@ -129,7 +145,12 @@ public abstract class Module {
         return true;
     }
 
-    /** Applies a loaded enabled flag without running hooks; see activateLoaded(). */
+    /** Records the state after construction as the "reset to default" state. */
+    public final void captureDefaults() {
+        this.defaultEnabled = enabled;
+    }
+
+    /** Applies a loaded enabled flag without running hooks; see syncLifecycle(). */
     public final void restoreEnabled(boolean value) {
         if (isToggleable()) {
             this.enabled = value;
@@ -141,6 +162,16 @@ public abstract class Module {
     public final void activateIfNeeded(MinecraftClient mc) {
         if (enabled && !active) {
             runEnableHook();
+        }
+    }
+
+    /** Makes the lifecycle hooks match the enabled flag (used after loading a profile). */
+    public final void syncLifecycle() {
+        boolean want = isToggleable() && enabled;
+        if (want && !active) {
+            runEnableHook();
+        } else if (!want && active) {
+            runDisableHook();
         }
     }
 
@@ -159,6 +190,17 @@ public abstract class Module {
 
     public final void toggle() {
         setEnabled(!enabled);
+    }
+
+    /** Enabled state, every setting and the keybind go back to their defaults. */
+    public final void resetToDefaults() {
+        if (isToggleable()) {
+            setEnabled(defaultEnabled);
+        }
+        for (Setting<?> s : settings) {
+            s.reset();
+        }
+        setKeyCode(defaultKeyValue);
     }
 
     private void runEnableHook() {

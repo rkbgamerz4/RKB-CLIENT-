@@ -26,7 +26,7 @@ public class CrosshairModule extends Module {
     private static CrosshairModule instance;
 
     public CrosshairModule() {
-        super("crosshair", "Custom Crosshair", "Replaces the vanilla crosshair with your own style.", Category.VISUAL);
+        super("crosshair", "Custom Crosshair", "Replaces the vanilla crosshair with your own style.", Category.VISUALS);
         instance = this;
     }
 

@@ -19,20 +19,33 @@ in **RKB LAUNCHER** (or any launcher with a Fabric 1.21.11 profile).
 Change them in `gradle.properties` (check https://fabricmc.net/develop).
 
 ## Features
-Open the menu with **Right Shift** or `/rkb`. Click a module to toggle it, **Edit** for its settings and keybind. Drag the
-list (or use the mouse wheel / arrow keys) to scroll. Search matches all categories.
+Open the menu with **Right Shift** or `/rkb`. Click a card to toggle a module, **Settings** for its page (keybind,
+options, reset to defaults). Drag the list (or wheel / arrow keys) to scroll. Search covers all categories.
+**Configuration** has 3 profile slots, HUD Editor and reset-all; **HUD Editor** lets you drag HUD elements.
 
-| Category | Module | What it does |
-|---|---|---|
-| HUD | FPS Display, Coordinates, Info HUD, Keystrokes | Text/box overlays with anchor and offset settings |
-| Visual | Custom Crosshair, Zoom | Own crosshair (cross/dot, size, gap, colour); FOV zoom toggle |
-| Performance | Memory Usage | Java heap use |
-| Utility | Clock, Interface | Real time; menu key, accent, HUD colour/background/shadow |
-| Combat | CPS Counter | Counts your clicks (read-only, never clicks for you) |
-| Movement | Toggle Sprint | Holds the normal sprint key while you walk forward |
+| Category | Modules |
+|---|---|
+| HUD | FPS Display, Coordinates, Info HUD, Keystrokes, CPS Counter, Armor Status, Potion Effects, Ping Display |
+| Performance | Memory Usage, Performance Stats (avg/low FPS, frame time) |
+| Visuals | Custom Crosshair, Zoom |
+| Controls | Toggle Sneak (vanilla option) |
+| Movement | Toggle Sprint |
+| Utility | Clock, Session Timer, Interface (menu key, accent, HUD style) |
+| World | World Info (day, time, weather), Minimap with waypoints |
 
-No module bypasses anti-cheat or gives an unfair advantage. The Interface module's keybind is the menu key and cannot be
-cleared.
+No module bypasses anti-cheat or gives an unfair advantage. The menu key cannot be cleared.
+
+## Minimap and waypoints
+Enable **Minimap** (World), then open its Settings page: size, range (32/48/64), square or circle, rotate with player,
+opacity, cave view underground, coordinates, N marker, waypoint names, line to the tracked waypoint, death waypoint.
+Move it with the HUD Editor.
+
+- **Add waypoint here** / **Open waypoint list** / **Track next waypoint**: Run buttons on the Minimap settings page
+  (works on Android with no keyboard), and unbound keys under Options > Controls > RKB CLIENT.
+- The waypoint list lets you add by name and X/Y/Z, track one (a dotted line from you to it plus name and distance
+  under the map), hide or delete. Off-map waypoints stick to the map edge.
+- Waypoints are saved per server or singleplayer world and per dimension in `config/rkbclient-waypoints.json`.
+- Terrain only: no player, mob or item radar. Some servers ban minimaps; check the rules before using it.
 
 ## Build (GitHub Codespaces)
 ```bash

@@ -1,5 +1,12 @@
 package com.rkb.client.module;
 
+import com.rkb.client.module.impl.ArmorHudModule;
+import com.rkb.client.module.impl.PerfStatsModule;
+import com.rkb.client.module.impl.PingModule;
+import com.rkb.client.module.impl.PotionHudModule;
+import com.rkb.client.module.impl.SessionTimerModule;
+import com.rkb.client.module.impl.ToggleSneakModule;
+import com.rkb.client.module.impl.WorldInfoModule;
 import com.rkb.client.module.impl.ClockModule;
 import com.rkb.client.module.impl.CoordinatesModule;
 import com.rkb.client.module.impl.CpsModule;
@@ -9,6 +16,7 @@ import com.rkb.client.module.impl.InfoHudModule;
 import com.rkb.client.module.impl.InterfaceModule;
 import com.rkb.client.module.impl.KeystrokesModule;
 import com.rkb.client.module.impl.MemoryModule;
+import com.rkb.client.module.impl.MinimapModule;
 import com.rkb.client.module.impl.ToggleSprintModule;
 import com.rkb.client.module.impl.ZoomModule;
 import net.minecraft.client.MinecraftClient;
@@ -47,6 +55,14 @@ public final class ModuleManager {
         instance.register(new InterfaceModule());
         instance.register(new CpsModule());
         instance.register(new ToggleSprintModule());
+        instance.register(new ToggleSneakModule());
+        instance.register(new ArmorHudModule());
+        instance.register(new PotionHudModule());
+        instance.register(new PingModule());
+        instance.register(new SessionTimerModule());
+        instance.register(new PerfStatsModule());
+        instance.register(new WorldInfoModule());
+        instance.register(new MinimapModule());
         instance.freeze();
     }
 
@@ -66,6 +82,9 @@ public final class ModuleManager {
     /** Builds immutable lookup caches once, so per-frame callers never allocate. */
     private void freeze() {
         allCache = List.copyOf(modules.values());
+        for (Module m : allCache) {
+            m.captureDefaults();
+        }
         for (Category c : Category.values()) {
             List<Module> l = new ArrayList<>();
             for (Module m : allCache) {

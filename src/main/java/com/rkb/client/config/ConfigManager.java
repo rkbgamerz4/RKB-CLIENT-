@@ -19,10 +19,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Reads and writes config/rkbclient.json. Never throws: a missing or malformed file falls back
- * to defaults (a broken file is renamed to rkbclient.json.broken so nothing is lost).
+ * Reads and writes config/rkbclient.json and three profile slots in config/rkbclient-profiles/.
+ * Never throws: a missing or malformed file falls back to defaults (a broken main file is renamed
+ * to rkbclient.json.broken so nothing is lost). Disk access happens only on load, on user changes
+ * and on shutdown, never per frame.
  */
 public final class ConfigManager {
+    public static final int PROFILE_SLOTS = 3;
+
     private static final int CONFIG_VERSION = 1;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -33,6 +37,13 @@ public final class ConfigManager {
         return FabricLoader.getInstance().getConfigDir().resolve("rkbclient.json");
     }
 
+    private static Path profileFile(int slot) {
+        return FabricLoader.getInstance().getConfigDir().resolve("rkbclient-profiles")
+                .resolve("profile" + slot + ".json");
+    }
+
+    // ------------------------------------------------------------------ main config
+
     public static void load() {
         Path file = file();
         if (!Files.isRegularFile(file)) {
@@ -41,18 +52,65 @@ public final class ConfigManager {
             return;
         }
         try {
-            String text = Files.readString(file, StandardCharsets.UTF_8);
-            JsonElement root = JsonParser.parseString(text);
-            if (!root.isJsonObject()) {
-                throw new IllegalStateException("root is not a JSON object");
-            }
-            apply(root.getAsJsonObject());
+            apply(parse(file));
             RkbClient.LOGGER.info("Config loaded from {}", file);
         } catch (Exception e) {
             RkbClient.LOGGER.error("Config is unreadable ({}). Using defaults.", e.toString());
             backupBroken(file);
             save();
         }
+    }
+
+    public static synchronized void save() {
+        write(file());
+    }
+
+    // ------------------------------------------------------------------ profiles
+
+    public static boolean profileExists(int slot) {
+        return Files.isRegularFile(profileFile(slot));
+    }
+
+    public static boolean saveProfile(int slot) {
+        return write(profileFile(slot));
+    }
+
+    /** Loads a profile live: modules are disabled, the profile applied, then lifecycle hooks re-run. */
+    public static boolean loadProfile(int slot) {
+        JsonObject root;
+        try {
+            root = parse(profileFile(slot));
+        } catch (Exception e) {
+            RkbClient.LOGGER.warn("Profile {} could not be loaded: {}", slot, e.toString());
+            return false;
+        }
+        for (Module m : ModuleManager.get().all()) {
+            m.setEnabled(false);
+        }
+        apply(root);
+        for (Module m : ModuleManager.get().all()) {
+            m.syncLifecycle();
+        }
+        save();
+        return true;
+    }
+
+    public static void resetAll() {
+        for (Module m : ModuleManager.get().all()) {
+            m.resetToDefaults();
+        }
+        save();
+    }
+
+    // ------------------------------------------------------------------ internals
+
+    private static JsonObject parse(Path file) throws IOException {
+        String text = Files.readString(file, StandardCharsets.UTF_8);
+        JsonElement root = JsonParser.parseString(text);
+        if (!root.isJsonObject()) {
+            throw new IllegalStateException("root is not a JSON object");
+        }
+        return root.getAsJsonObject();
     }
 
     private static void apply(JsonObject root) {
@@ -96,7 +154,7 @@ public final class ConfigManager {
         }
     }
 
-    public static synchronized void save() {
+    private static boolean write(Path file) {
         try {
             JsonObject root = new JsonObject();
             root.addProperty("configVersion", CONFIG_VERSION);
@@ -116,17 +174,18 @@ public final class ConfigManager {
             }
             root.add("modules", mods);
 
-            Path file = file();
             Files.createDirectories(file.getParent());
-            Path tmp = file.resolveSibling("rkbclient.json.tmp");
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             Files.writeString(tmp, GSON.toJson(root), StandardCharsets.UTF_8);
             try {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
             }
+            return true;
         } catch (IOException | RuntimeException e) {
-            RkbClient.LOGGER.error("Could not save config: {}", e.toString());
+            RkbClient.LOGGER.error("Could not save {}: {}", file, e.toString());
+            return false;
         }
     }
 

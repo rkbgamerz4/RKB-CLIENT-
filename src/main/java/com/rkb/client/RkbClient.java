@@ -5,6 +5,7 @@ import com.rkb.client.gui.RkbMenuScreen;
 import com.rkb.client.hud.HudRenderer;
 import com.rkb.client.input.KeybindRegistry;
 import com.rkb.client.module.ModuleManager;
+import com.rkb.client.waypoint.WaypointStore;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -28,12 +29,14 @@ public class RkbClient implements ClientModInitializer {
         ModuleManager.init();
         KeybindRegistry.registerAll(ModuleManager.get());
         ConfigManager.load();
+        WaypointStore.load();
         HudRenderer.init();
 
         ClientTickEvents.END_CLIENT_TICK.register(RkbClient::onTick);
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             ConfigManager.save();
+            WaypointStore.save();
             ModuleManager.get().shutdown(client);
         });
 

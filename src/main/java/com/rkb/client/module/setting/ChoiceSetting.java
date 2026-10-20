@@ -31,6 +31,14 @@ public class ChoiceSetting extends Setting<String> {
         return options;
     }
 
+    public void select(String value) {
+        int i = options.indexOf(value);
+        if (i >= 0 && i != index) {
+            index = i;
+            changed();
+        }
+    }
+
     public void cycle() {
         index = (index + 1) % options.size();
         changed();

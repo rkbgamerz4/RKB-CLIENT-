@@ -1,14 +1,25 @@
 {
   "key.category.rkbclient.main": "RKB CLIENT",
+  "key.rkbclient.ping": "Ping Display",
   "key.rkbclient.crosshair": "Custom Crosshair",
   "key.rkbclient.fps": "FPS Display",
+  "key.rkbclient.session_timer": "Session Timer",
   "key.rkbclient.memory": "Memory Usage",
+  "key.rkbclient.minimap": "Minimap",
+  "key.rkbclient.minimap.add_waypoint": "Add waypoint here",
+  "key.rkbclient.minimap.open_waypoints": "Open waypoint list",
+  "key.rkbclient.minimap.next_tracked": "Track next waypoint",
   "key.rkbclient.clock": "Clock",
+  "key.rkbclient.armor_hud": "Armor Status",
   "key.rkbclient.cps": "CPS Counter",
   "key.rkbclient.coordinates": "Coordinates",
   "key.rkbclient.zoom": "Zoom",
   "key.rkbclient.keystrokes": "Keystrokes",
+  "key.rkbclient.world_info": "World Info",
   "key.rkbclient.interface": "Interface",
   "key.rkbclient.info_hud": "Info HUD",
-  "key.rkbclient.toggle_sprint": "Toggle Sprint"
+  "key.rkbclient.toggle_sprint": "Toggle Sprint",
+  "key.rkbclient.toggle_sneak": "Toggle Sneak",
+  "key.rkbclient.perf_stats": "Performance Stats",
+  "key.rkbclient.potion_hud": "Potion Effects"
 }

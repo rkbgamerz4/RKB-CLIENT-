@@ -20,7 +20,7 @@ public class CpsModule extends TextHudModule {
 
     public CpsModule() {
         super("cps", "CPS Counter", "Shows how many times per second you click.",
-                Category.COMBAT, "Top Right", 4, 44);
+                Category.HUD, "Top Right", 4, 44);
     }
 
     private static void trim(ArrayDeque<Long> q, long now) {

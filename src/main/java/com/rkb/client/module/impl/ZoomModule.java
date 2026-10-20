@@ -12,7 +12,7 @@ public class ZoomModule extends Module {
     private int original = -1;
 
     public ZoomModule() {
-        super("zoom", "Zoom", "Narrows your field of view while on. Bind a key to toggle it.", Category.VISUAL);
+        super("zoom", "Zoom", "Narrows your field of view while on. Bind a key to toggle it.", Category.VISUALS);
     }
 
     /** Never stored as enabled, so a crash can't leave the game zoomed at next launch. */
