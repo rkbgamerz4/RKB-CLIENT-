@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "rkbclient:font/rkb_logo.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": ["\uE7A1"]
+    }
+  ]
+}

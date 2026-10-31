@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "rkbclient",
+  "version": "${version}",
+  "name": "RKB CLIENT",
+  "description": "Client-side Fabric mod with an in-game module menu, HUD modules and JSON config. Built for RKB LAUNCHER.",
+  "authors": ["RKB"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/rkbclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.rkb.client.RkbClient"]
+  },
+  "mixins": ["rkbclient.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.2",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
