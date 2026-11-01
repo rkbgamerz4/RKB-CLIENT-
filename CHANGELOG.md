@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+- Account-based cosmetics: RKB account (RKB_1234) owns the inventory; claim, redeem, pending purchase, equip/unequip, history.
+- RKB Cosmetics module: your and other RKB players' capes and badges (cached, hash-checked, no network in render).
+- `/rkb cloud register`, `/rkb cosmetics ...`, COSMETICS tab, new badge glyph variants.
+- Supabase: rkb_* tables, RLS, service-role SQL functions, rkb-cosmetics Edge Function, public cape bucket.
+
 ## 0.8.0
 - Name Tag Badge: off by default, Settings section with master toggle, style, visibility, cloud sync and status.
 - UUID-based friends list (add by username/UUID, remove, duplicates and invalid input handled), 0.7 names migrated.

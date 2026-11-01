@@ -6,7 +6,8 @@
   "mixins": [],
   "client": [
     "InGameHudMixin",
-    "PlayerEntityMixin"
+    "PlayerEntityMixin",
+    "AbstractClientPlayerEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 0

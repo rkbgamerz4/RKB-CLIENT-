@@ -5,7 +5,36 @@
       "file": "rkbclient:font/rkb_logo.png",
       "ascent": 8,
       "height": 9,
-      "chars": ["\uE7A1"]
+      "chars": [
+        "\ue7a1"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "rkbclient:font/rkb_gold.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\ue7a2"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "rkbclient:font/rkb_violet.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\ue7a3"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "rkbclient:font/rkb_red.png",
+      "ascent": 8,
+      "height": 9,
+      "chars": [
+        "\ue7a4"
+      ]
     }
   ]
 }

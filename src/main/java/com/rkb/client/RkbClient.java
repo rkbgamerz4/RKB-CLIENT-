@@ -54,6 +54,13 @@ public class RkbClient implements ClientModInitializer {
                 NAME, ModuleManager.get().all().size());
     }
 
+    private static java.util.function.Supplier<net.minecraft.client.gui.screen.Screen> pendingScreen;
+
+    /** Opens a screen on the next tick (a screen opened straight from a chat command would be closed with the chat). */
+    public static void requestScreen(java.util.function.Supplier<net.minecraft.client.gui.screen.Screen> screen) {
+        pendingScreen = screen;
+    }
+
     public static void requestMenu() {
         menuRequested = true;
     }
@@ -73,6 +80,11 @@ public class RkbClient implements ClientModInitializer {
             }
             manager.tick(mc);
             KeybindRegistry.tick(mc);
+            if (pendingScreen != null && mc.currentScreen == null) {
+                var supplier = pendingScreen;
+                pendingScreen = null;
+                mc.setScreen(supplier.get());
+            }
             if (menuRequested && mc.currentScreen == null) {
                 menuRequested = false;
                 mc.setScreen(new RkbMenuScreen());

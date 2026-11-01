@@ -1,0 +1,44 @@
+# Changed files, 0.8.0 to 0.9.0 (branch feature/account-cosmetics-0.9.0 against main)
+
+- modified: CHANGELOG.md
+- modified: README.md
+- new: docs/COSMETICS_0.9.0.md
+- modified: docs/RELEASE_NOTES.md
+- new: docs/RELEASE_NOTES_0.9.0.md
+- new: docs/TESTING_0.9.0.md
+- modified: gradle.properties
+- modified: src/main/java/com/rkb/client/RkbClient.java
+- modified: src/main/java/com/rkb/client/RkbCommands.java
+- modified: src/main/java/com/rkb/client/cloud/CloudService.java
+- new: src/main/java/com/rkb/client/cosmetics/AccountCache.java
+- new: src/main/java/com/rkb/client/cosmetics/AssetRules.java
+- new: src/main/java/com/rkb/client/cosmetics/BadgeGlyphs.java
+- new: src/main/java/com/rkb/client/cosmetics/CapeTextures.java
+- new: src/main/java/com/rkb/client/cosmetics/CosmeticsManager.java
+- new: src/main/java/com/rkb/client/cosmetics/CosmeticsRender.java
+- new: src/main/java/com/rkb/client/cosmetics/RemoteCosmetics.java
+- new: src/main/java/com/rkb/client/cosmetics/ServerKey.java
+- new: src/main/java/com/rkb/client/gui/CosmeticsScreen.java
+- modified: src/main/java/com/rkb/client/gui/ModuleMeta.java
+- modified: src/main/java/com/rkb/client/gui/RkbMenuScreen.java
+- new: src/main/java/com/rkb/client/mixin/AbstractClientPlayerEntityMixin.java
+- modified: src/main/java/com/rkb/client/mixin/PlayerEntityMixin.java
+- modified: src/main/java/com/rkb/client/module/ModuleManager.java
+- new: src/main/java/com/rkb/client/module/impl/CosmeticsModule.java
+- modified: src/main/resources/assets/minecraft/font/default.json
+- modified: src/main/resources/assets/rkbclient/lang/en_us.json
+- new: src/main/resources/assets/rkbclient/textures/font/rkb_gold.png
+- new: src/main/resources/assets/rkbclient/textures/font/rkb_red.png
+- new: src/main/resources/assets/rkbclient/textures/font/rkb_violet.png
+- modified: src/main/resources/rkbclient.mixins.json
+- new: src/test/java/com/rkb/client/cosmetics/CosmeticsLogicTest.java
+- modified: supabase/README.md
+- new: supabase/functions/_shared/validate.ts
+- new: supabase/functions/rkb-cosmetics/index.ts
+- new: supabase/inspect_cosmetics_schema.sql
+- new: supabase/migrations/20261031000000_rkb_cosmetics.sql
+- new: supabase/seed_example_cosmetics.sql
+- new: supabase/tests/validate.test.mjs
+- new: docs/CHANGED_FILES_0.9.0.md
+
+Not touched: the 0.8.0 migration and `rkb-badges` function, the existing cosmetics tables and `cosmetics-catalog`, the HUD and all other modules, Gradle versions (only the version number changed).

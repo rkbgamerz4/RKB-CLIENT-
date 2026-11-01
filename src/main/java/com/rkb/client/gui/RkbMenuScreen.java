@@ -45,7 +45,7 @@ public class RkbMenuScreen extends Screen {
     private static final int FOOT_H = 14;
     private static final int[] DUMMY = new int[0];
 
-    private static final String[] TAB_LABELS = {"MOD MENU", "SETTINGS", "PROFILES", "HUD EDITOR", "WAYPOINTS", "ABOUT"};
+    private static final String[] TAB_LABELS = {"MOD MENU", "SETTINGS", "PROFILES", "HUD EDITOR", "WAYPOINTS", "COSMETICS", "ABOUT"};
     private static final int PAGE_MODS = 0;
     private static final int PAGE_SETTINGS = 1;
     private static final int PAGE_PROFILES = 2;
@@ -524,7 +524,7 @@ public class RkbMenuScreen extends Screen {
         int gap = 3;
         int count = TAB_LABELS.length;
         int tw = (avail - gap * (count - 1)) / count;
-        int activeTab = tab == PAGE_MODS ? 0 : tab == PAGE_SETTINGS ? 1 : tab == PAGE_PROFILES ? 2 : 5;
+        int activeTab = tab == PAGE_MODS ? 0 : tab == PAGE_SETTINGS ? 1 : tab == PAGE_PROFILES ? 2 : 6;
         for (int i = 0; i < count; i++) {
             int x = px + i * (tw + gap);
             boolean active = i == activeTab;
@@ -545,6 +545,10 @@ public class RkbMenuScreen extends Screen {
                     case 4 -> {
                         ConfigManager.save();
                         MinecraftClient.getInstance().setScreen(new WaypointScreen());
+                    }
+                    case 5 -> {
+                        ConfigManager.save();
+                        MinecraftClient.getInstance().setScreen(new CosmeticsScreen());
                     }
                     default -> openTab(PAGE_ABOUT);
                 }

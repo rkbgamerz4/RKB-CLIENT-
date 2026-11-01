@@ -5,6 +5,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.rkb.client.RkbClient;
+import com.rkb.client.cosmetics.CosmeticsManager;
+import com.rkb.client.cosmetics.RemoteCosmetics;
 import com.rkb.client.module.impl.NameTagBadgeModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.session.Session;
@@ -44,7 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class CloudService {
     public enum Status { IDLE, SYNCING, CONNECTED, OFFLINE, ERROR }
 
-    static final HttpClient HTTP = HttpClient.newBuilder()
+    public static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(8))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
@@ -84,6 +86,19 @@ public final class CloudService {
                 RkbClient.LOGGER.warn("Cloud task failed: {}", t.toString());
             }
         };
+    }
+
+    /** Shared scheduler for background tasks of other RKB features; stopped by shutdown(). */
+    public static ScheduledExecutorService scheduler() {
+        return exec();
+    }
+
+    public static Runnable guarded(Runnable r) {
+        return guard(r);
+    }
+
+    public static boolean isStopping() {
+        return stopping;
     }
 
     public static void background(Runnable r) {
@@ -258,7 +273,10 @@ public final class CloudService {
                 storeSession(http("POST", CloudStore.url() + "/auth/v1/token?grant_type=password", body, CloudStore.anonKey()));
                 notifyPlayer("Signed in as " + CloudStore.email() + ".");
                 syncNow(true);
-                MinecraftClient.getInstance().execute(CloudService::onBadgeFeatureChanged);
+                MinecraftClient.getInstance().execute(() -> {
+                    onBadgeFeatureChanged();
+                    RemoteCosmetics.onFeatureChanged();
+                });
             } catch (CloudException e) {
                 notifyPlayer(e.status() == 400 || e.status() == 401 ? "Sign in failed: wrong email or password." : "Sign in failed: " + e.getMessage());
             } catch (IOException e) {
@@ -269,10 +287,45 @@ public final class CloudService {
         });
     }
 
+    /** Creates a new RKB account (Supabase Auth sign-up). Whether e-mail confirmation is needed depends on your project. */
+    public static void register(String email, String password) {
+        if (CloudStore.anonKey().isEmpty()) {
+            notifyPlayer("Add your Supabase publishable key as \"anonKey\" in config/rkbclient-cloud.json first.");
+            return;
+        }
+        notifyPlayer("Creating your RKB account...");
+        background(() -> {
+            try {
+                JsonObject body = new JsonObject();
+                body.addProperty("email", email);
+                body.addProperty("password", password);
+                JsonObject res = http("POST", CloudStore.url() + "/auth/v1/signup", body, CloudStore.anonKey());
+                if (res.has("access_token")) {
+                    storeSession(res);
+                    notifyPlayer("Account created and signed in as " + CloudStore.email() + ".");
+                    MinecraftClient.getInstance().execute(() -> {
+                        onBadgeFeatureChanged();
+                        RemoteCosmetics.onFeatureChanged();
+                    });
+                } else {
+                    notifyPlayer("Account created. Check your e-mail to confirm it, then run /rkb cloud login.");
+                }
+            } catch (CloudException e) {
+                notifyPlayer("Sign up failed: " + e.getMessage());
+            } catch (IOException e) {
+                notifyPlayer("Could not reach the server. Try again when you are online.");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
     public static void logout() {
         cancelTasks();
         CloudStore.clearSession();
         BadgeRegistry.clear();
+        CosmeticsManager.onSignedOut();
+        RemoteCosmetics.onFeatureChanged();
         status = Status.IDLE;
         notifyPlayer("Signed out. Local settings and friends are kept.");
     }
@@ -535,12 +588,17 @@ public final class CloudService {
     // ------------------------------------------------------------------ HTTP
 
     private static void storeSession(JsonObject auth) {
+        String previousUser = CloudStore.userId();
         String access = str(auth, "access_token");
         String refresh = str(auth, "refresh_token");
         long expiresIn = auth.has("expires_in") ? auth.get("expires_in").getAsLong() : 3600;
         String userId = auth.has("user") && auth.get("user").isJsonObject() ? str(auth.getAsJsonObject("user"), "id") : "";
         String email = auth.has("user") && auth.get("user").isJsonObject() ? str(auth.getAsJsonObject("user"), "email") : "";
         CloudStore.setSession(access, refresh, System.currentTimeMillis() + expiresIn * 1000L, userId, email);
+        if (!userId.isEmpty() && !userId.equals(previousUser)) {
+            // a different RKB account is now signed in: drop everything cached for the old one
+            MinecraftClient.getInstance().execute(CosmeticsManager::onAccountChanged);
+        }
     }
 
     private static void refreshSession() throws CloudException, IOException, InterruptedException {
@@ -553,12 +611,23 @@ public final class CloudService {
         storeSession(http("POST", CloudStore.url() + "/auth/v1/token?grant_type=refresh_token", body, CloudStore.anonKey()));
     }
 
-    /** Calls the rkb-badges function with the user's token, refreshing it once if needed. */
+    /** Calls a Supabase Edge Function as the signed-in RKB account (Auth token, refreshed once if needed). */
+    public static JsonObject callFunction(String function, JsonObject body) throws CloudException, IOException, InterruptedException {
+        if (CloudStore.anonKey().isEmpty() || !CloudStore.signedIn()) {
+            throw new CloudException(401, "signed_out");
+        }
+        return authedCall(function, body);
+    }
+
     private static JsonObject authedCall(JsonObject body) throws CloudException, IOException, InterruptedException {
+        return authedCall("rkb-badges", body);
+    }
+
+    private static JsonObject authedCall(String function, JsonObject body) throws CloudException, IOException, InterruptedException {
         if (CloudStore.accessToken().isEmpty() || CloudStore.expiresAtMs() - 60_000 < System.currentTimeMillis()) {
             refreshSession();
         }
-        String url = CloudStore.url() + "/functions/v1/rkb-badges";
+        String url = CloudStore.url() + "/functions/v1/" + function;
         try {
             return http("POST", url, body, CloudStore.accessToken());
         } catch (CloudException e) {

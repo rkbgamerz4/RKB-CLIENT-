@@ -74,6 +74,11 @@ menu. Cloud: put your Supabase publishable key into `config/rkbclient-cloud.json
 `/rkb cloud status`, `/rkb cloud cosmetics`. Release notes: `docs/RELEASE_NOTES_0.8.0.md`; test status:
 `docs/TESTING_0.8.0.md`.
 
+## RKB account cosmetics (0.9.0)
+Cosmetics belong to your RKB account, not to a Minecraft account or launcher. Sign in (`/rkb cloud register|login <email> <password>`),
+open the COSMETICS tab, claim/redeem/buy, equip a cape and a badge, and turn on the **RKB Cosmetics** module to see yours and other
+RKB players'. Setup, trust model and limits: `docs/COSMETICS_0.9.0.md`, backend: `supabase/README.md`, test status: `docs/TESTING_0.9.0.md`.
+
 ## Build (GitHub Codespaces)
 ```bash
 bash scripts/bootstrap-wrapper.sh   # once: creates gradlew + wrapper jar (binary files not in the ZIP)

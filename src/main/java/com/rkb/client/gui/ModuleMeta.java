@@ -11,7 +11,7 @@ import java.util.Set;
 /** Menu-only metadata: the Minecraft item shown as each module's icon, and which modules carry the NEW! badge. */
 public final class ModuleMeta {
     private static final Set<String> NEW_IDS = Set.of(
-            "minimap", "nametag_badge", "night_vision", "target_health", "health_display", "weather_changer");
+            "minimap", "nametag_badge", "rkb_cosmetics", "night_vision", "target_health", "health_display", "weather_changer");
 
     private static final Map<String, ItemStack> ICONS = new HashMap<>();
     private static ItemStack fallback;
@@ -84,5 +84,6 @@ public final class ModuleMeta {
         put("biome", Items.GRASS_BLOCK);
         put("light_level", Items.TORCH);
         put("nametag_badge", Items.NAME_TAG);
+        put("rkb_cosmetics", Items.ELYTRA);
     }
 }

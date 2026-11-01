@@ -7,6 +7,8 @@
   "key.rkbclient.health_display": "Health Display",
   "key.rkbclient.fps": "FPS Display",
   "key.rkbclient.session_timer": "Session Timer",
+  "key.rkbclient.rkb_cosmetics": "RKB Cosmetics",
+  "key.rkbclient.rkb_cosmetics.open_cosmetics": "Open cosmetics shop",
   "key.rkbclient.weather_changer": "Weather Changer",
   "key.rkbclient.auto_jump": "Auto Jump",
   "key.rkbclient.combo_counter": "Combo Counter",

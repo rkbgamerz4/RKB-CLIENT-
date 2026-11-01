@@ -6,6 +6,8 @@ import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.CloudStore;
 import com.rkb.client.cloud.CosmeticsCatalog;
 import com.rkb.client.cloud.FriendsManager;
+import com.rkb.client.cosmetics.CosmeticsManager;
+import com.rkb.client.gui.CosmeticsScreen;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -14,7 +16,8 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
  * /rkb                      open the menu
  * /rkb friend add|remove <player or UUID>, /rkb friend list
  * /rkb badge add|remove|list   same as friend (kept from version 0.7)
- * /rkb cloud login <email> <password> | logout | link | sync | status | cosmetics
+ * /rkb cloud register|login <email> <password> | logout | link | sync | status | cosmetics
+ * /rkb cosmetics list|inventory|history|refresh|open|claim <id>|buy <id>|redeem <code>|equip <id>|unequip <slot>
  * Client commands are not sent to the server, but never type your password on a shared screen.
  */
 public final class RkbCommands {
@@ -30,6 +33,7 @@ public final class RkbCommands {
                         })
                         .then(friends("friend"))
                         .then(friends("badge"))
+                        .then(cosmetics())
                         .then(cloud())));
     }
 
@@ -65,6 +69,14 @@ public final class RkbCommands {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> cloud() {
         return ClientCommandManager.literal("cloud")
+                .then(ClientCommandManager.literal("register")
+                        .then(ClientCommandManager.argument("email", StringArgumentType.word())
+                                .then(ClientCommandManager.argument("password", StringArgumentType.greedyString())
+                                        .executes(ctx -> {
+                                            CloudService.register(StringArgumentType.getString(ctx, "email"),
+                                                    StringArgumentType.getString(ctx, "password"));
+                                            return 1;
+                                        }))))
                 .then(ClientCommandManager.literal("login")
                         .then(ClientCommandManager.argument("email", StringArgumentType.word())
                                 .then(ClientCommandManager.argument("password", StringArgumentType.greedyString())
@@ -97,5 +109,89 @@ public final class RkbCommands {
                     CosmeticsCatalog.refresh();
                     return 1;
                 }));
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> cosmetics() {
+        return ClientCommandManager.literal("cosmetics")
+                .then(ClientCommandManager.literal("list").executes(ctx -> {
+                    var st = CosmeticsManager.state();
+                    if (st.items().isEmpty()) {
+                        CloudService.notifyPlayer("The shop is empty or not loaded. Try /rkb cosmetics refresh");
+                    }
+                    int shown = 0;
+                    for (var i : st.items()) {
+                        if (shown++ >= 12) {
+                            CloudService.notifyPlayer("... more in the Cosmetics screen (/rkb cosmetics open)");
+                            break;
+                        }
+                        CloudService.notifyPlayer(i.id() + " | " + i.name() + " | " + i.type() + " | "
+                                + (i.priceCents() == 0 ? "free" : i.priceCents() / 100 + "." + String.format("%02d", i.priceCents() % 100) + " " + i.currency())
+                                + (i.owned() ? " | owned" : ""));
+                    }
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("inventory").executes(ctx -> {
+                    var st = CosmeticsManager.state();
+                    int n = 0;
+                    for (var i : st.items()) {
+                        if (i.owned()) {
+                            n++;
+                            CloudService.notifyPlayer(i.id() + " | " + i.name() + " | " + i.type()
+                                    + (i.id().equals(st.equipped().get(i.type())) ? " | equipped" : ""));
+                        }
+                    }
+                    if (n == 0) {
+                        CloudService.notifyPlayer("Nothing in your inventory yet. Account: " + (st.rkbId().isEmpty() ? "not loaded" : st.rkbId()));
+                    }
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("history").executes(ctx -> {
+                    var st = CosmeticsManager.state();
+                    int n = 0;
+                    for (var h : st.history()) {
+                        if (n++ >= 10) {
+                            break;
+                        }
+                        CloudService.notifyPlayer(h.createdAt().substring(0, Math.min(10, h.createdAt().length())) + " | " + h.cosmeticId()
+                                + " | " + h.kind() + " | " + h.status());
+                    }
+                    if (n == 0) {
+                        CloudService.notifyPlayer("No history yet.");
+                    }
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("refresh").executes(ctx -> {
+                    CosmeticsManager.refresh();
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("open").executes(ctx -> {
+                    RkbClient.requestScreen(CosmeticsScreen::new);
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("claim")
+                        .then(ClientCommandManager.argument("id", StringArgumentType.word()).executes(ctx -> {
+                            CosmeticsManager.claim(StringArgumentType.getString(ctx, "id"));
+                            return 1;
+                        })))
+                .then(ClientCommandManager.literal("buy")
+                        .then(ClientCommandManager.argument("id", StringArgumentType.word()).executes(ctx -> {
+                            CosmeticsManager.purchaseStart(StringArgumentType.getString(ctx, "id"));
+                            return 1;
+                        })))
+                .then(ClientCommandManager.literal("redeem")
+                        .then(ClientCommandManager.argument("code", StringArgumentType.greedyString()).executes(ctx -> {
+                            CosmeticsManager.redeem(StringArgumentType.getString(ctx, "code"));
+                            return 1;
+                        })))
+                .then(ClientCommandManager.literal("equip")
+                        .then(ClientCommandManager.argument("id", StringArgumentType.word()).executes(ctx -> {
+                            CosmeticsManager.equip(StringArgumentType.getString(ctx, "id"));
+                            return 1;
+                        })))
+                .then(ClientCommandManager.literal("unequip")
+                        .then(ClientCommandManager.argument("slot", StringArgumentType.word()).executes(ctx -> {
+                            CosmeticsManager.unequip(StringArgumentType.getString(ctx, "slot"));
+                            return 1;
+                        })));
     }
 }

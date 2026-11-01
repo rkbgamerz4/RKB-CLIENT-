@@ -30,6 +30,7 @@ import com.rkb.client.module.impl.ServerAddressModule;
 import com.rkb.client.module.impl.BiomeModule;
 import com.rkb.client.module.impl.LightLevelModule;
 import com.rkb.client.module.impl.ClockModule;
+import com.rkb.client.module.impl.CosmeticsModule;
 import com.rkb.client.module.impl.CoordinatesModule;
 import com.rkb.client.module.impl.CpsModule;
 import com.rkb.client.module.impl.CrosshairModule;
@@ -109,6 +110,7 @@ public final class ModuleManager {
         instance.register(new BiomeModule());
         instance.register(new LightLevelModule());
         instance.register(new NameTagBadgeModule());
+        instance.register(new CosmeticsModule());
         instance.freeze();
     }
 
