@@ -8,10 +8,43 @@ offline or an official Minecraft account. Another RKB account has its own invent
 ## Using it
 1. Create or sign in to an RKB account: `/rkb cloud register <email> <password>` or `/rkb cloud login <email> <password>`
    (needs your publishable key in `config/rkbclient-cloud.json`).
-2. Open the **COSMETICS** tab (or `/rkb cosmetics open`): Shop (claim free items, start a purchase), Inventory (equip / unequip), History.
+2. Open the **COSMETICS** tab (or `/rkb cosmetics open`). The full window has eight pages: **Cape Collection**, **Skin**,
+   **Skin Sets**, **Equipped**, **RKB Collection**, **Upload Skin**, **Preview** and **Save & Apply**.
    Commands: `/rkb cosmetics list|inventory|history|refresh|claim <id>|buy <id>|redeem <code>|equip <id>|unequip <slot>`.
 3. Turn on the **RKB Cosmetics** module (Visuals; off by default) to see your cape/badge and other RKB players'. In its settings:
-   "Show other players' cosmetics" and "Let others see my cosmetics".
+   "Show other players' cosmetics", "Let others see my cosmetics" and "RKB logo on name tags".
+
+## Cape Collection
+The collection always shows exactly ten designs: **Bangladesh, India, USA, Pakistan, Brazil, Japan, UK, Nepal,
+RKB Original, RKB Shadow**. A card is labelled **EQUIPPED**, **OWNED** or **NOT OWNED** from the server's catalog and
+inventory only. The PNGs are bundled with the mod as a display safety net, but a bundled image is used only when its
+SHA-256 matches the catalog row; a missing catalog row or a missing ownership row never makes a cape claimable or owned.
+You cannot equip a cape you do not own.
+
+## Skin sets (local library + verified cloud sync)
+- **Upload Skin**: paste a PNG path, use `Scan inbox` on `config/rkbclient-skins/inbox/`, or drop one or more PNGs on the
+  cosmetics window. Files are copied to `config/rkbclient-skins/files/`; the original is never changed.
+- Only 64x64 (modern) and 64x32 (legacy) PNGs up to 256 KB are accepted. Classic (Steve) and slim (Alex) models are
+  detected from the skin texture. Legacy images are expanded to the modern 64x64 layout on load so the preview and the
+  in-game model agree. HD skins are rejected rather than silently distorted.
+- **Skin Sets**: up to 20 named sets; rename, delete with confirmation, and Apply instantly. No Minecraft restart or
+  server rejoin is needed. The active set and the index are persisted locally.
+- **Preview** shows your skin with a selected cape. **Save & Apply** persists the library, applies the active set and
+  pushes eligible changes to your verified RKB account.
+- Cloud sync requires the signed-in RKB account to have proven the *current* Minecraft UUID with `/rkb cloud link`.
+  Sets then sync through `rkb_skin_sets` / `rkb_equipped_skin` and the `rkb-cosmetics` Edge Function (new skin actions).
+  Offline or unlinked accounts keep using the local library only and never read or write another player's cloud skins.
+- On a new account or UUID, local files stay on disk but old remote links are dropped; verified accounts can upload them
+  again. A cloud version with a different image replaces the local PNG only after its SHA-256 and PNG dimensions pass.
+
+## Identity and multiplayer
+The menu reads your current Minecraft username/UUID from the running session; there is no second RKB username/password
+login screen. Cloud inventory and skin sync are enabled only when `linkedUuid == session UUID` (the Mojang-verified link).
+For other players, the backend lookup returns a `skin` object only for presence rows marked `verified`; unverified/offline
+identities keep their cape/badge behaviour but cannot make others load an arbitrary skin. Textures are fetched off the
+render thread, SHA-256 checked, size-limited (256 KB) and cached in `config/rkbclient-cosmetics/` and
+`config/rkbclient-skins/cache/`. Join/leave and cosmetic changes refresh the lookup; stale entries are dropped. Known RKB
+players get the RKB logo or their equipped badge before their real username in name tags (toggle in module settings).
 
 ## Flows (all decided on the server)
 | Action | What the server checks |
@@ -48,8 +81,18 @@ Any launcher that can run a Fabric 1.21.11 profile and load a mod from `mods/` w
 This is **not assumed**: a launcher or client with its own mod loader (for example Feather's) may not load Fabric mods at all.
 Other mods that replace capes or skins can conflict, because RKB swaps the cape in the player's skin textures.
 
+## Backend changes needed
+Apply `supabase/migrations/20261121000000_rkb_skins_and_cape_collection.sql` after the two earlier 0.9.0 migrations,
+then redeploy `rkb-cosmetics`. It creates `rkb_skin_sets` and `rkb_equipped_skin` with RLS and service-role RPCs, updates
+`rkb_lookup_looks` so remote skins require `verified`, and seeds the ten cape catalog rows (no inventory grants).
+Cap PNGs in `src/main/resources/assets/rkbclient/textures/cosmetics/` must also be uploaded to the `rkb-cosmetics`
+bucket at the seeded `asset_path` values if you want non-bundled clients to download them.
+
 ## Limitations
 - No payment provider is integrated; paid items are fulfilled by you from the service role (see supabase/README.md).
 - Existing `cosmetics`/`cosmetic_*` data is not imported (schema was unavailable).
 - Capes only render in first-person-hidden/third-person like any cape, and only for players whose client has loaded the image.
-- Everything client-side is unverified until built and run in game (see TESTING_0.9.0.md).
+- The new migration and Edge Function are supplied, **not applied to the live project** (no Supabase credentials were
+  available). Until you apply them, skin-set cloud actions return an error and local sets still work offline.
+- Gradle build and unit tests pass, but the window, rendering and multiplayer flows have not been exercised in game
+  (see TESTING_0.9.0.md).

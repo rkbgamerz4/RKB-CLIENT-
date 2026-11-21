@@ -7,6 +7,8 @@ import com.google.gson.JsonParser;
 import com.rkb.client.RkbClient;
 import com.rkb.client.cosmetics.CosmeticsManager;
 import com.rkb.client.cosmetics.RemoteCosmetics;
+import com.rkb.client.cosmetics.SkinCloudSync;
+import com.rkb.client.cosmetics.SkinSetStore;
 import com.rkb.client.module.impl.NameTagBadgeModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.session.Session;
@@ -276,6 +278,7 @@ public final class CloudService {
                 MinecraftClient.getInstance().execute(() -> {
                     onBadgeFeatureChanged();
                     RemoteCosmetics.onFeatureChanged();
+                    SkinCloudSync.refresh();
                 });
             } catch (CloudException e) {
                 notifyPlayer(e.status() == 400 || e.status() == 401 ? "Sign in failed: wrong email or password." : "Sign in failed: " + e.getMessage());
@@ -306,6 +309,7 @@ public final class CloudService {
                     MinecraftClient.getInstance().execute(() -> {
                         onBadgeFeatureChanged();
                         RemoteCosmetics.onFeatureChanged();
+                        SkinCloudSync.refresh();
                     });
                 } else {
                     notifyPlayer("Account created. Check your e-mail to confirm it, then run /rkb cloud login.");
@@ -341,7 +345,7 @@ public final class CloudService {
         UUID uuid = session.getUuidOrNull();
         String name = session.getUsername();
         String token = session.getAccessToken();
-        var sessionService = mc.getSessionService();
+        var sessionService = mc.getApiServices().sessionService();
         if (uuid == null || name == null) {
             notifyPlayer("This game session has no Minecraft account (offline mode), so it cannot be linked.");
             return;
@@ -366,6 +370,8 @@ public final class CloudService {
                 CloudStore.setLinked(res.get("linked_uuid").getAsString(), name);
                 notifyPlayer("Linked " + name + " to " + CloudStore.email() + ".");
                 syncNow(true);
+                SkinSetStore.onIdentityLinked();
+                RemoteCosmetics.onFeatureChanged();
             } catch (CloudException e) {
                 notifyPlayer(switch (e.getMessage()) {
                     case "ownership_not_verified" -> "Mojang did not confirm this account. Try again.";

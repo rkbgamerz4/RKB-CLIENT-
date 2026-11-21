@@ -96,6 +96,7 @@ public final class CosmeticsManager {
         version++;
         refresh();
         RemoteCosmetics.onFeatureChanged();
+        SkinSetStore.onAccountChanged();
     }
 
     public static void onSignedOut() {
@@ -107,6 +108,7 @@ public final class CosmeticsManager {
         } catch (IOException e) {
             RkbClient.LOGGER.warn("Could not delete the cosmetics cache: {}", e.toString());
         }
+        SkinSetStore.onAccountChanged();
         version++;
     }
 
@@ -211,6 +213,10 @@ public final class CosmeticsManager {
             case "not_owned" -> "You do not own that cosmetic.";
             case "invalid_or_used_code" -> "That code is not valid, was already used or has expired.";
             case "rate_limited" -> "Slow down a little and try again.";
+            case "identity_not_verified" -> "Link this Minecraft account with /rkb cloud link first.";
+            case "name_taken" -> "A cloud skin set with that name already exists.";
+            case "set_limit" -> "You reached the 20 skin-set limit for this Minecraft account.";
+            case "invalid_skin" -> "The server rejected that skin image.";
             default -> "Something went wrong (" + code + ").";
         };
     }
@@ -282,7 +288,68 @@ public final class CosmeticsManager {
         if (sha == null && key == null) {
             return null;
         }
-        return new RemoteCosmetics.Look(cape == null ? null : cape.id(), sha == null ? null : cape.assetPath(), sha, key);
+        // The local player's skin comes from SkinSetStore; the remote skin fields stay empty for the account look.
+        return new RemoteCosmetics.Look(cape == null ? null : cape.id(), sha == null ? null : cape.assetPath(), sha, key,
+                null, null, null, null, true, false);
+    }
+
+    /**
+     * The catalog plus the ten official capes. An official cape that is not in the server catalog is still shown, but
+     * as "not owned" and with no claim/equip action. That is deliberate: the client never invents ownership.
+     */
+    public static List<Item> collection() {
+        State st = state();
+        List<Item> out = new ArrayList<>();
+        for (CapeCollection.Design d : CapeCollection.all()) {
+            Item server = find(st, d.id());
+            if (server != null) {
+                out.add(server);
+            } else {
+                out.add(new Item(d.id(), d.name(), d.description(), "cape", d.rarity(), 0, "USD", false,
+                        "", "", "", "", false));
+            }
+        }
+        for (Item i : st.items()) {
+            if (!CapeCollection.isOfficial(i.id())) {
+                out.add(i);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    public static Item item(String id) {
+        if (id == null) {
+            return null;
+        }
+        for (Item i : collection()) {
+            if (i.id().equals(id)) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    public static Item equippedItem(String slot) {
+        State st = state();
+        String id = st.equipped().get(slot);
+        return id == null ? null : find(st, id);
+    }
+
+    public static boolean isEquipped(String id) {
+        if (id == null) {
+            return false;
+        }
+        return id.equals(state().equipped().get("cape")) || id.equals(state().equipped().get("badge"));
+    }
+
+    public static List<Item> byType(String type) {
+        List<Item> out = new ArrayList<>();
+        for (Item i : collection()) {
+            if (type.equals(i.type())) {
+                out.add(i);
+            }
+        }
+        return out;
     }
 
     private static Item find(State st, String id) {

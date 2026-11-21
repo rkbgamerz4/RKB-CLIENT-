@@ -1,6 +1,7 @@
 // Run: node --experimental-strip-types supabase/tests/validate.test.mjs
 import {
-  inWindow, isAssetPath, isCosmeticId, isMcName, isSha256, isSlot, isUuid, normalizeCode, normalizeServerKey,
+  inWindow, isAssetPath, isCosmeticId, isMcName, isSha256, isSkinModel, isSkinName, isSkinPath, isSkinPng,
+  isSlot, isUuid, MAX_SKIN_BYTES, normalizeCode, normalizeServerKey, skinPngSize,
 } from "../functions/_shared/validate.ts";
 
 let failed = 0;
@@ -42,6 +43,27 @@ check(inWindow(null, null, now), "no window = available");
 check(!inWindow("2026-12-01T00:00:00Z", null, now), "not yet available");
 check(!inWindow(null, "2026-10-01T00:00:00Z", now), "expired");
 check(inWindow("2026-10-01T00:00:00Z", "2026-12-01T00:00:00Z", now), "inside window");
+
+// skin sets (the same vectors are checked by the Java SkinRulesTest)
+check(isSkinName("My Skin") && isSkinName("Дарк Скин") && isSkinName("A.B-1_2"), "skin names accepted");
+check(!isSkinName("") && !isSkinName("a".repeat(33)) && !isSkinName("bad/name") && !isSkinName(null), "bad skin names rejected");
+check(isSkinModel("classic") && isSkinModel("slim") && !isSkinModel("alex") && !isSkinModel(null), "skin models");
+check(isSkinPath("skins/" + "a".repeat(64) + ".png"), "skin storage path accepted");
+check(!isSkinPath("capes/a.png") && !isSkinPath("../skins/a.png") && !isSkinPath("skins/a.JPG"), "bad skin paths rejected");
+
+function png(width, height) {
+  const b = new Uint8Array(33);
+  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  b[11] = 13;
+  b.set([0x49, 0x48, 0x44, 0x52], 12);
+  b[19] = width;
+  b[23] = height;
+  return b;
+}
+eq(JSON.stringify(skinPngSize(png(64, 32))), '{"width":64,"height":32}', "PNG IHDR parsed");
+check(isSkinPng(png(64, 64)) && isSkinPng(png(64, 32)), "standard skin dimensions accepted");
+check(!isSkinPng(png(128, 128)) && !isSkinPng(new Uint8Array(3)), "HD and malformed skins rejected");
+check(!isSkinPng(new Uint8Array(MAX_SKIN_BYTES + 1)), "oversized upload rejected");
 
 console.log(failed === 0 ? "ALL PASSED" : failed + " FAILED");
 process.exit(failed === 0 ? 0 : 1);

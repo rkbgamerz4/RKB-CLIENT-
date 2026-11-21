@@ -6,6 +6,9 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 export const MC_NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
 export const COSMETIC_ID_RE = /^[a-z0-9_]{2,40}$/;
 export const SLOTS = ["cape", "badge"] as const;
+export const SKIN_MODELS = ["classic", "slim"] as const;
+export const SKIN_NAME_RE = /^[\p{L}\p{N} _.-]{1,32}$/u;
+export const MAX_SKIN_BYTES = 256 * 1024;
 
 export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
@@ -39,6 +42,38 @@ export function isAssetPath(v: unknown): v is string {
 
 export function isSha256(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
+}
+
+export function isSkinName(v: unknown): v is string {
+  return typeof v === "string" && SKIN_NAME_RE.test(v.trim()) && v.trim().length > 0;
+}
+
+export function isSkinModel(v: unknown): v is (typeof SKIN_MODELS)[number] {
+  return typeof v === "string" && (SKIN_MODELS as readonly string[]).includes(v);
+}
+
+/** Skin uploads are content-addressed: skins/<sha256>.png in the public-read bucket. */
+export function isSkinPath(v: unknown): v is string {
+  return isAssetPath(v) && v.startsWith("skins/");
+}
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** Reads an IHDR size without decoding. Returns null for anything that is not a standard Minecraft skin PNG. */
+export function skinPngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 33 || bytes.length > MAX_SKIN_BYTES) return null;
+  for (let i = 0; i < PNG_SIGNATURE.length; i++) {
+    if (bytes[i] !== PNG_SIGNATURE[i]) return null;
+  }
+  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52) return null; // IHDR
+  const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+  const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+  if (width === 64 && (height === 64 || height === 32)) return { width, height };
+  return null;
+}
+
+export function isSkinPng(bytes: Uint8Array): boolean {
+  return skinPngSize(bytes) !== null;
 }
 
 /** Redeem codes: letters and digits only, 8 to 32 of them. Returns the canonical upper-case form or null. */

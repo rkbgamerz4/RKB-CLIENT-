@@ -3,7 +3,7 @@ package com.rkb.client.module.impl;
 import com.rkb.client.module.Category;
 import com.rkb.client.module.setting.ChoiceSetting;
 import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.option.ParticlesMode;
+import net.minecraft.particle.ParticlesMode;
 import net.minecraft.client.option.SimpleOption;
 
 import java.util.List;

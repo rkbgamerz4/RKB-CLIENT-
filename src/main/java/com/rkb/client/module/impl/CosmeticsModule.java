@@ -1,6 +1,7 @@
 package com.rkb.client.module.impl;
 
 import com.rkb.client.cosmetics.RemoteCosmetics;
+import com.rkb.client.cosmetics.SkinSetStore;
 import com.rkb.client.gui.CosmeticsScreen;
 import com.rkb.client.module.Category;
 import com.rkb.client.module.Module;
@@ -20,10 +21,12 @@ public class CosmeticsModule extends Module {
             new BoolSetting("show_others", "Show other players' cosmetics", true), () -> isEnabled());
     private final BoolSetting shareMine = add(
             new BoolSetting("share_mine", "Let others see my cosmetics", true), () -> isEnabled());
+    private final BoolSetting nameTagLogo = add(
+            new BoolSetting("name_tag_logo", "RKB logo on name tags", true), () -> isEnabled());
 
     public CosmeticsModule() {
         super("rkb_cosmetics", "RKB Cosmetics",
-                "Show your RKB account's cape and badge, and other RKB players'. Off by default; needs an RKB account.",
+                "Show your RKB skin, cape and badge, and other RKB players'. Off by default; needs an RKB account for online sync.",
                 Category.VISUALS);
         instance = this;
         addAction("open_cosmetics", "Open cosmetics shop", mc -> mc.setScreen(new CosmeticsScreen()));
@@ -39,6 +42,10 @@ public class CosmeticsModule extends Module {
 
     public boolean shareMine() {
         return shareMine.on();
+    }
+
+    public boolean nameTagLogo() {
+        return nameTagLogo.on();
     }
 
     @Override
@@ -59,5 +66,6 @@ public class CosmeticsModule extends Module {
     @Override
     protected void onTick(MinecraftClient mc) {
         RemoteCosmetics.updateSelfUuid(mc);
+        SkinSetStore.tick();
     }
 }

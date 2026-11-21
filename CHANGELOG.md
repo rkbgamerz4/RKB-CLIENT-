@@ -5,6 +5,15 @@
 - RKB Cosmetics module: your and other RKB players' capes and badges (cached, hash-checked, no network in render).
 - `/rkb cloud register`, `/rkb cosmetics ...`, COSMETICS tab, new badge glyph variants.
 - Supabase: rkb_* tables, RLS, service-role SQL functions, rkb-cosmetics Edge Function, public cape bucket.
+- Full in-game cosmetics window: ten official capes (Bangladesh, India, USA, Pakistan, Brazil, Japan, UK, Nepal,
+  RKB Original, RKB Shadow) with honest Owned / Not Owned / Equipped state, Skin, Skin Sets, Equipped, RKB Collection,
+  Upload Skin, Preview and Save & Apply, styled like the supplied dark RKB/Feather UI.
+- Real local skin-set library: PNG path or drag-and-drop, 64x64/64x32 and 256 KB validation, classic/slim detection,
+  20 named sets, rename/delete, instant apply, preview with cape, and local files in `config/rkbclient-skins/`.
+- Identity comes from the running Minecraft session. Skin sets sync to the cloud only for a Mojang-verified UUID;
+  verified RKB CLIENT players see each other's skins/capes with cached, hash-checked textures and no render-thread I/O.
+- RKB logo before the username on supported RKB name tags (configurable), without replacing the Minecraft name.
+- New Supabase migration for skin sets, equipped skin and the ten cape catalog rows; new `rkb-cosmetics` skin actions.
 
 ## 0.8.0
 - Name Tag Badge: off by default, Settings section with master toggle, style, visibility, cloud sync and status.

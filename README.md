@@ -77,7 +77,16 @@ menu. Cloud: put your Supabase publishable key into `config/rkbclient-cloud.json
 ## RKB account cosmetics (0.9.0)
 Cosmetics belong to your RKB account, not to a Minecraft account or launcher. Sign in (`/rkb cloud register|login <email> <password>`),
 open the COSMETICS tab, claim/redeem/buy, equip a cape and a badge, and turn on the **RKB Cosmetics** module to see yours and other
-RKB players'. Setup, trust model and limits: `docs/COSMETICS_0.9.0.md`, backend: `supabase/README.md`, test status: `docs/TESTING_0.9.0.md`.
+RKB players'.
+
+The in-game COSMETICS window has eight pages: **Cape Collection** (the ten official capes, always labelled Owned / Not Owned /
+Equipped from the backend), **Skin**, **Skin Sets**, **Equipped**, **RKB Collection**, **Upload Skin**, **Preview** and
+**Save & Apply**. Upload a 64x64 or 64x32 PNG by path or by dropping it on the window; save up to 20 named sets (classic
+and slim are detected), rename/delete them, apply one instantly without restarting, and preview it with any cape. Files live
+in `config/rkbclient-skins/` and work offline. Cloud sync of skin sets is enabled only after `/rkb cloud link` proves the
+current Minecraft UUID through Mojang; the game never shows a separate RKB username/password screen inside cosmetics. Verified
+RKB CLIENT players see each other's skins and capes through a cached, hash-checked lookup that never runs on the render thread.
+Setup, trust model and limits: `docs/COSMETICS_0.9.0.md`, backend: `supabase/README.md`, test status: `docs/TESTING_0.9.0.md`.
 
 ## Build (GitHub Codespaces)
 ```bash

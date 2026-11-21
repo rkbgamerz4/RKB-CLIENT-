@@ -3,6 +3,7 @@ package com.rkb.client.cosmetics;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.rkb.client.RkbClient;
 import com.rkb.client.cloud.CloudException;
 import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.CloudStore;
@@ -26,20 +27,27 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * What other players (and you) wear. Two background jobs, both on the cloud thread and both off the render path:
- *  1. presence: tells the backend "this Minecraft player on this server is my RKB account" (display only, never ownership)
- *  2. lookup: asks which players around you have an RKB account with an equipped cape/badge
- * The render thread only calls lookOf(), a hash lookup on an immutable snapshot.
+ *  1. presence: tells the backend "this Minecraft player on this server is my RKB account" (display only)
+ *  2. lookup: asks which players around you are RKB CLIENT users and which cape/badge/skin they have equipped
+ *
+ * The server decides {@code verified}; the client only applies remote skins when that flag is true. A local-only
+ * (offline or unlinked) player never uploads skin sets, so an offline username cannot claim another inventory.
  */
 public final class RemoteCosmetics {
-    /** capeSha/capePath are null when no cape is equipped; badgeKey is null when no supported badge is equipped. */
-    public record Look(String capeId, String capePath, String capeSha, String badgeKey) {
+    /**
+     * Any of the cosmetic fields may be null. {@code rkbClient} means the player is known to run RKB CLIENT.
+     * {@code skinVerified} is required before a remote skin is drawn.
+     */
+    public record Look(String capeId, String capePath, String capeSha, String badgeKey,
+                       String skinId, String skinPath, String skinSha, String skinModel,
+                       boolean rkbClient, boolean skinVerified) {
     }
 
     private record Snapshot(String serverKey, UUID selfUuid, String selfName, List<UUID> visible) {
     }
 
-    private static final long RECHECK_MS = 120_000L;
-    private static final long PRESENCE_EVERY_MS = 10 * 60_000L;
+    private static final long RECHECK_MS = 30_000L;
+    private static final long PRESENCE_EVERY_MS = 5 * 60_000L;
 
     private static volatile Map<UUID, Look> others = Map.of();
     private static volatile Look self;
@@ -56,6 +64,9 @@ public final class RemoteCosmetics {
     // ------------------------------------------------------------------ render-thread reads
 
     public static Look lookOf(UUID id) {
+        if (id == null) {
+            return null;
+        }
         if (id.equals(selfUuid)) {
             return self;
         }
@@ -63,20 +74,33 @@ public final class RemoteCosmetics {
     }
 
     public static boolean isSelf(UUID id) {
-        return id.equals(selfUuid);
+        return id != null && id.equals(selfUuid);
+    }
+
+    public static boolean isRkbClient(UUID id) {
+        Look l = lookOf(id);
+        return l != null && l.rkbClient();
     }
 
     public static void updateSelfUuid(MinecraftClient mc) {
-        selfUuid = mc.player == null ? null : mc.player.getUuid();
+        UUID now = mc.player == null ? null : mc.player.getUuid();
+        if (now == null ? selfUuid != null : !now.equals(selfUuid)) {
+            selfUuid = now;
+            PlayerTextures.clearResults();
+            if (now == null) {
+                others = Map.of();
+                self = null;
+            }
+        }
     }
 
     /** Called by CosmeticsManager when your own inventory/equipment changed. */
     public static void setSelf(Look look) {
         CosmeticsModule m = CosmeticsModule.get();
         self = m != null && m.isEnabled() ? look : null;
-        CapeTextures.clearResults();
+        PlayerTextures.clearResults();
         if (self != null && self.capeSha() != null) {
-            CapeTextures.ensure(self.capeSha(), self.capePath());
+            CapeTextures.ensure(self.capeId(), self.capeSha(), self.capePath());
         }
     }
 
@@ -95,12 +119,19 @@ public final class RemoteCosmetics {
             synchronized (CHECKED) {
                 CHECKED.clear();
             }
-            CapeTextures.clearResults();
+            PlayerTextures.clearResults();
             return;
         }
         CosmeticsManager.refresh();
+        CapeCollection.all().forEach(c -> CapeTextures.ensureBuiltin(c.id()));
         if (CloudStore.signedIn() && !CloudStore.anonKey().isEmpty()) {
-            task = CloudService.scheduler().scheduleWithFixedDelay(CloudService.guarded(RemoteCosmetics::tick), 3, 20, TimeUnit.SECONDS);
+            task = CloudService.scheduler().scheduleWithFixedDelay(CloudService.guarded(() -> {
+                try {
+                    tick();
+                } catch (Exception e) {
+                    RkbClient.LOGGER.warn("RKB cosmetics refresh failed: {}", e.toString());
+                }
+            }), 3, 10, TimeUnit.SECONDS);
         }
     }
 
@@ -138,7 +169,11 @@ public final class RemoteCosmetics {
         }
         Snapshot s = snapshot();
         if (s == null || s.serverKey() == null) {
-            return;   // singleplayer or no world: nothing to register or look up
+            // Singleplayer, title screen or leaving a server: drop stale remote cosmetics.
+            if (!others.isEmpty()) {
+                others = Map.of();
+            }
+            return;
         }
         long now = System.currentTimeMillis();
         if (m.shareMine() && (!s.serverKey().equals(lastPresenceKey) || now - lastPresenceMs > PRESENCE_EVERY_MS)) {
@@ -162,7 +197,7 @@ public final class RemoteCosmetics {
             return;
         }
         String error = res.has("error") ? res.get("error").getAsString() : "presence_failed";
-        lastPresenceKey = s.serverKey();     // do not retry every 20 seconds
+        lastPresenceKey = s.serverKey();     // do not retry every 10 seconds
         lastPresenceMs = now;
         if (WARNED.add(error)) {
             CloudService.notifyPlayer(switch (error) {
@@ -208,6 +243,7 @@ public final class RemoteCosmetics {
                 if (id == null) {
                     continue;
                 }
+                boolean verified = bool(o, "verified");
                 String capeId = null;
                 String capePath = null;
                 String capeSha = null;
@@ -223,8 +259,26 @@ public final class RemoteCosmetics {
                 if (o.has("badge") && o.get("badge").isJsonObject() && BadgeGlyphs.supported(text(o.getAsJsonObject("badge"), "key"))) {
                     badge = text(o.getAsJsonObject("badge"), "key");
                 }
-                if (capeSha != null || badge != null) {
-                    found.put(id, new Look(capeId, capePath, capeSha, badge));
+                String skinId = null;
+                String skinPath = null;
+                String skinSha = null;
+                String skinModel = null;
+                if (verified && o.has("skin") && o.get("skin").isJsonObject()) {
+                    JsonObject sk = o.getAsJsonObject("skin");
+                    String path = text(sk, "path");
+                    String sha = text(sk, "sha256");
+                    String model = text(sk, "model");
+                    if (AssetRules.validSha(sha) && AssetRules.validPath(path) && SkinRules.validModel(model)) {
+                        skinId = text(sk, "id");
+                        skinPath = path;
+                        skinSha = sha;
+                        skinModel = model;
+                    }
+                }
+                boolean rkb = !o.has("rkb") || bool(o, "rkb");
+                if (rkb || capeSha != null || badge != null || skinSha != null) {
+                    found.put(id, new Look(capeId, capePath, capeSha, badge, skinId, skinPath, skinSha, skinModel,
+                            rkb, verified && skinSha != null));
                 }
             }
         }
@@ -247,12 +301,19 @@ public final class RemoteCosmetics {
         }
         for (Look l : found.values()) {
             if (l.capeSha() != null) {
-                CapeTextures.ensure(l.capeSha(), l.capePath());
+                CapeTextures.ensure(l.capeId(), l.capeSha(), l.capePath());
+            }
+            if (l.skinSha() != null && l.skinVerified()) {
+                SkinTexturesCache.ensureRemote(l.skinSha(), l.skinPath());
             }
         }
     }
 
     private static String text(JsonObject o, String key) {
         return o != null && o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : "";
+    }
+
+    private static boolean bool(JsonObject o, String key) {
+        return o != null && o.has(key) && o.get(key).isJsonPrimitive() && o.get(key).getAsBoolean();
     }
 }

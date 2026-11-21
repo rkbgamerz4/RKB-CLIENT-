@@ -84,3 +84,27 @@ payment webhook function can call the same SQL function after the provider confi
 - Clients can only SELECT their own inventory, equipment and history (RLS). All writes go through functions that only the service role can execute.
 - Redeem: unknown, used and expired codes return the same answer; a code is not consumed if you already own the item; 10 attempts per minute per account (best effort, per function instance).
 - Minecraft session tokens never reach Supabase. Presence stores a Minecraft UUID, name and server address you chose to share.
+
+---
+
+## Skin sets and the ten official capes (same 0.9.0 release)
+
+| Item | Purpose |
+|---|---|
+| `rkb_skin_sets` | named 64x64/64x32 PNG sets (classic/slim), one row per verified Minecraft UUID's RKB account |
+| `rkb_equipped_skin` | the one skin set other verified RKB CLIENT players see |
+| `rkb_skin_*` RPCs | list/upload/rename/delete/equip/unequip; every write rechecks the 0.8.0 Mojang link |
+| updated `rkb_lookup_looks` | adds a `skin` object only when the presence row is `verified` |
+| cape catalog seed | the exact ten bundled capes; **no inventory rows are granted** |
+
+Steps: apply `20261029000000_rkb_badges.sql` and `20261031000000_rkb_cosmetics.sql` first, then
+`20261121000000_rkb_skins_and_cape_collection.sql`. Redeploy `rkb-cosmetics` afterwards. Upload the ten PNGs from
+`src/main/resources/assets/rkbclient/textures/cosmetics/` to the `rkb-cosmetics` bucket at the `asset_path` values in
+the migration (the mod also ships them, so it can show them before the bucket is populated). The bucket stays public-read
+with no client write policy: the Edge Function validates the PNG signature, IHDR dimensions and 256 KB limit, computes
+the SHA-256 and uploads to `skins/<sha>.png` with the service role.
+
+Security: the Edge Function derives the account from the Auth JWT and requires `rkb_link_uuid(jwt_subject) == mc_uuid`
+for every skin action; the SQL functions check the same link and ownership. An offline or unlinked Minecraft name is
+local-only and cannot read or write another account's skins. The new tables have RLS: clients can SELECT only their own
+rows; all writes are service-role functions. Nothing above has been applied to the live project from this repository.

@@ -1,5 +1,7 @@
 package com.rkb.client.cosmetics;
 
+import com.rkb.client.module.impl.CosmeticsModule;
+import com.rkb.client.module.impl.NameTagBadgeModule;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 
@@ -14,23 +16,36 @@ public final class CosmeticsRender {
     private CosmeticsRender() {
     }
 
-    /** Puts an equipped RKB badge glyph in front of a player's name, if that player has one. */
+    public static boolean hasRkbIdentity(UUID player) {
+        return !RemoteCosmetics.isSelf(player) && RemoteCosmetics.isRkbClient(player);
+    }
+
+    /**
+     * Puts the equipped RKB badge, or the plain RKB logo for an RKB CLIENT user without a badge, in front of a
+     * player's name. The real Minecraft username is always kept after the prefix.
+     */
     public static Text withBadge(UUID player, Text original) {
         if (RemoteCosmetics.isSelf(player)) {
             return original;   // your own name tag is never drawn
         }
         RemoteCosmetics.Look look = RemoteCosmetics.lookOf(player);
-        if (look == null || look.badgeKey() == null) {
+        if (look == null) {
             return original;
         }
-        String glyph = BadgeGlyphs.glyph(look.badgeKey());
+        String key = look.badgeKey();
+        String glyph = key == null ? null : BadgeGlyphs.glyph(key);
         if (glyph == null) {
-            return original;
+            CosmeticsModule module = CosmeticsModule.get();
+            if (!look.rkbClient() || module == null || !module.isEnabled() || !module.nameTagLogo()) {
+                return original;
+            }
+            key = "brand";
+            glyph = NameTagBadgeModule.ICON;
         }
-        Text prefix = PREFIXES.get(look.badgeKey());
+        Text prefix = PREFIXES.get(key);
         if (prefix == null) {
             prefix = Text.literal(glyph + " ").styled(s -> s.withColor(0xFFFFFF));
-            PREFIXES.put(look.badgeKey(), prefix);
+            PREFIXES.put(key, prefix);
         }
         MutableText out = Text.empty();
         out.append(prefix);

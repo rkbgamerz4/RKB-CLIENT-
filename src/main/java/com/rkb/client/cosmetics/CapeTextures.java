@@ -7,8 +7,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.entity.player.SkinTextures;
-import net.minecraft.util.AssetInfo;
 import net.minecraft.util.Identifier;
 
 import java.io.ByteArrayInputStream;
@@ -25,24 +23,19 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Downloads, verifies and registers cape images, and swaps them into a player's skin textures.
- * Every image is: path-checked, size-limited (256 KB), SHA-256 checked against the catalog, decoded and size-checked
- * before it becomes a texture. Downloads and decoding run on the cloud thread; textures are registered on the game
- * thread; the render path (apply) only reads maps.
+ * Downloads, verifies and registers cape images. Official RKB capes ship inside the mod; for those the bundled file is
+ * used only when its hash matches the hash in the server catalog. Any other cape is downloaded, size-limited,
+ * SHA-256 checked and cached. All I/O is off the render thread; the render path only reads a map.
  */
 public final class CapeTextures {
-    private static final int MAX_TEXTURES = 32;
+    private static final int MAX_TEXTURES = 40;
 
-    private record Cached(SkinTextures original, Identifier texture, SkinTextures result) {
-    }
-
-    private static volatile Map<String, Identifier> loaded = Map.of();
+    private static volatile Map<String, Identifier> bySha = Map.of();
+    private static volatile Map<String, Identifier> byId = Map.of();
     private static final Set<String> IN_FLIGHT = new HashSet<>();
     private static final Set<String> FAILED = new HashSet<>();
-    private static final Map<UUID, Cached> RESULTS = new ConcurrentHashMap<>();
 
     private CapeTextures() {
     }
@@ -51,31 +44,67 @@ public final class CapeTextures {
         return FabricLoader.getInstance().getConfigDir().resolve("rkbclient-cosmetics");
     }
 
-    /** True once the texture for this image hash is ready to draw. */
     public static boolean ready(String sha) {
-        return sha != null && loaded.containsKey(sha);
+        return sha != null && bySha.containsKey(sha);
     }
 
-    /** Starts the download if needed. Safe to call repeatedly. */
-    public static void ensure(String sha, String path) {
+    public static Identifier texture(String sha) {
+        return sha == null ? null : bySha.get(sha);
+    }
+
+    public static Identifier texture(String id, String sha) {
+        Identifier t = id == null ? null : byId.get(id);
+        return t != null ? t : texture(sha);
+    }
+
+    /** The cape the player has equipped, or null when it is not loaded yet / there is none. */
+    public static Identifier textureOf(UUID player) {
+        RemoteCosmetics.Look look = RemoteCosmetics.lookOf(player);
+        return look == null || look.capeSha() == null ? null : bySha.get(look.capeSha());
+    }
+
+    /** Starts a download if needed. Safe to call repeatedly. */
+    public static void ensure(String id, String sha, String path) {
         if (!AssetRules.validSha(sha) || !AssetRules.validPath(path)) {
             return;
         }
+        if (CapeCollection.matchesBundled(id, sha)) {
+            ensureBuiltin(id);
+            return;
+        }
+        start(sha, id, false, path);
+    }
+
+    /** Registers a bundled cape for the collection thumbnails and for the official cape ids. */
+    public static void ensureBuiltin(String id) {
+        if (!CapeCollection.isOfficial(id) || byId.containsKey(id)) {
+            return;
+        }
+        String sha = CapeCollection.bundledSha(id);
+        byte[] data = CapeCollection.bundledBytes(id);
+        if (sha == null || data == null) {
+            return;
+        }
+        start(sha, id, true, null);
+    }
+
+    private static void start(String sha, String id, boolean builtin, String path) {
         synchronized (IN_FLIGHT) {
-            if (loaded.containsKey(sha) || FAILED.contains(sha) || !IN_FLIGHT.add(sha) || loaded.size() >= MAX_TEXTURES) {
+            if ((bySha.containsKey(sha) && (id == null || id.isEmpty() || byId.containsKey(id)))
+                    || FAILED.contains(sha) || !IN_FLIGHT.add(sha) || bySha.size() >= MAX_TEXTURES) {
                 return;
             }
         }
         CloudService.background(() -> {
             try {
-                byte[] data = fetch(sha, path);
+                byte[] data = builtin ? CapeCollection.bundledBytes(id) : fetch(sha, path);
                 NativeImage image = NativeImage.read(new ByteArrayInputStream(data));
                 if (!AssetRules.validCapeSize(image.getWidth(), image.getHeight())) {
                     image.close();
                     throw new IOException("unsupported cape size");
                 }
                 MinecraftClient mc = MinecraftClient.getInstance();
-                mc.execute(() -> register(mc, sha, image));
+                mc.execute(() -> register(mc, sha, id, image));
             } catch (Exception e) {
                 RkbClient.LOGGER.warn("Cape {} could not be loaded: {}", sha.substring(0, 8), e.toString());
                 synchronized (IN_FLIGHT) {
@@ -86,15 +115,21 @@ public final class CapeTextures {
         });
     }
 
-    private static void register(MinecraftClient mc, String sha, NativeImage image) {
+    private static void register(MinecraftClient mc, String sha, String id, NativeImage image) {
         try {
-            Identifier id = Identifier.of(RkbClient.MOD_ID, "cosmetics/cape_" + sha.substring(0, 16));
+            Identifier tex = Identifier.of(RkbClient.MOD_ID, "cosmetics/cape_" + sha.substring(0, 16));
             NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "RKB cape " + sha.substring(0, 8), image);
             texture.upload();
-            mc.getTextureManager().registerTexture(id, texture);
-            Map<String, Identifier> next = new HashMap<>(loaded);
-            next.put(sha, id);
-            loaded = Map.copyOf(next);
+            mc.getTextureManager().registerTexture(tex, texture);
+            Map<String, Identifier> nextSha = new HashMap<>(bySha);
+            nextSha.put(sha, tex);
+            bySha = Map.copyOf(nextSha);
+            if (id != null && !id.isEmpty()) {
+                Map<String, Identifier> nextId = new HashMap<>(byId);
+                nextId.put(id, tex);
+                byId = Map.copyOf(nextId);
+            }
+            PlayerTextures.clearResults();
         } catch (Throwable t) {
             RkbClient.LOGGER.warn("Cape texture registration failed: {}", t.toString());
             synchronized (IN_FLIGHT) {
@@ -142,32 +177,7 @@ public final class CapeTextures {
         return data;
     }
 
-    // ------------------------------------------------------------------ render path (no I/O, no allocation when cached)
-
-    /** Returns the skin with this player's equipped cape, or the original when there is none or it is not loaded yet. */
-    public static SkinTextures apply(UUID player, SkinTextures original) {
-        RemoteCosmetics.Look look = RemoteCosmetics.lookOf(player);
-        if (look == null || look.capeSha() == null || original == null) {
-            return original;
-        }
-        Identifier tex = loaded.get(look.capeSha());
-        if (tex == null) {
-            return original;
-        }
-        Cached c = RESULTS.get(player);
-        if (c != null && c.original() == original && c.texture().equals(tex)) {
-            return c.result();
-        }
-        SkinTextures result = new SkinTextures(original.body(), new AssetInfo.TextureAssetInfo(tex, tex),
-                original.elytra(), original.model(), original.secure());
-        RESULTS.put(player, new Cached(original, tex, result));
-        if (RESULTS.size() > 256) {
-            RESULTS.clear();
-        }
-        return result;
-    }
-
     public static void clearResults() {
-        RESULTS.clear();
+        PlayerTextures.clearResults();
     }
 }

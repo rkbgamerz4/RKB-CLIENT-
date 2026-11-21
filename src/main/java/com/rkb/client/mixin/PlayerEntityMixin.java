@@ -10,6 +10,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.UUID;
+
 /**
  * Adds RKB badges to a player's display name (used by name tags): the badge the player equipped in their RKB account,
  * and the friends/everyone name tag badge. require = 0: if the method is renamed in a future version the game still
@@ -20,8 +22,11 @@ public abstract class PlayerEntityMixin {
     @Inject(method = "getDisplayName", at = @At("RETURN"), cancellable = true, require = 0)
     private void rkbclient$badge(CallbackInfoReturnable<Text> cir) {
         Text original = cir.getReturnValue();
-        Text out = CosmeticsRender.withBadge(((Entity) (Object) this).getUuid(), original);
-        if (NameTagBadgeModule.applies(this)) {
+        UUID id = ((Entity) (Object) this).getUuid();
+        Text out = CosmeticsRender.withBadge(id, original);
+        // A known RKB player already has the logo/equipped badge from the cosmetics lookup. Only use the older
+        // friends/everyone badge for players the cosmetics backend does not know, so nothing is drawn twice.
+        if (!CosmeticsRender.hasRkbIdentity(id) && NameTagBadgeModule.applies(this)) {
             out = NameTagBadgeModule.decorate(out);
         }
         if (out != original) {

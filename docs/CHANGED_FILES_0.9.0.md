@@ -41,4 +41,32 @@
 - new: supabase/tests/validate.test.mjs
 - new: docs/CHANGED_FILES_0.9.0.md
 
-Not touched: the 0.8.0 migration and `rkb-badges` function, the existing cosmetics tables and `cosmetics-catalog`, the HUD and all other modules, Gradle versions (only the version number changed).
+## Cosmetics UI, skins and multiplayer (same branch, later commits)
+- modified: src/main/java/com/rkb/client/RkbClient.java (skin library load, first-join sync)
+- modified: src/main/java/com/rkb/client/cloud/CloudService.java (Mojang session API fix, link hooks)
+- modified: src/main/java/com/rkb/client/cosmetics/CapeTextures.java (built-in capes, cache, hash checks)
+- modified: src/main/java/com/rkb/client/cosmetics/CosmeticsManager.java (official collection, account hooks)
+- modified: src/main/java/com/rkb/client/cosmetics/CosmeticsRender.java (RKB logo before username)
+- modified: src/main/java/com/rkb/client/cosmetics/RemoteCosmetics.java (skins, verified flag, stale cleanup)
+- modified: src/main/java/com/rkb/client/gui/CosmeticsScreen.java (full eight-page in-game window)
+- modified: src/main/java/com/rkb/client/mixin/AbstractClientPlayerEntityMixin.java (skin + cape textures)
+- modified: src/main/java/com/rkb/client/mixin/PlayerEntityMixin.java (no double name-tag badge)
+- modified: src/main/java/com/rkb/client/module/impl/CosmeticsModule.java (logo setting, skin tick)
+- modified: src/main/java/com/rkb/client/module/impl/ReduceParticlesModule.java (1.21.11 ParticlesMode API)
+- new: src/main/java/com/rkb/client/cosmetics/CapeCollection.java
+- new: src/main/java/com/rkb/client/cosmetics/PlayerIdentity.java
+- new: src/main/java/com/rkb/client/cosmetics/PlayerTextures.java
+- new: src/main/java/com/rkb/client/cosmetics/RkbLogo.java
+- new: src/main/java/com/rkb/client/cosmetics/SkinCloudSync.java
+- new: src/main/java/com/rkb/client/cosmetics/SkinPng.java
+- new: src/main/java/com/rkb/client/cosmetics/SkinRules.java
+- new: src/main/java/com/rkb/client/cosmetics/SkinSetStore.java
+- new: src/main/java/com/rkb/client/cosmetics/SkinTexturesCache.java
+- new: src/test/java/com/rkb/client/cosmetics/SkinRulesTest.java
+- new: src/main/resources/assets/rkbclient/textures/cosmetics/cape_*.png (ten capes)
+- new: src/main/resources/assets/rkbclient/textures/gui/rkb_logo.png
+- modified: supabase/functions/_shared/validate.ts, supabase/functions/rkb-cosmetics/index.ts
+- new: supabase/migrations/20261121000000_rkb_skins_and_cape_collection.sql
+- modified: supabase/tests/validate.test.mjs, docs/TESTING_0.9.0.md, docs/RELEASE_NOTES_0.9.0.md
+
+Not touched: the 0.8.0 migration and `rkb-badges` function, the existing cosmetics tables and `cosmetics-catalog`, the HUD and all other modules, Gradle versions. The live Supabase project was not changed.

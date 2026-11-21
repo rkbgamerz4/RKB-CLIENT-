@@ -5,6 +5,8 @@ import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.CloudStore;
 import com.rkb.client.cloud.FriendsManager;
 import com.rkb.client.config.ConfigManager;
+import com.rkb.client.cosmetics.SkinCloudSync;
+import com.rkb.client.cosmetics.SkinSetStore;
 import com.rkb.client.gui.RkbMenuScreen;
 import com.rkb.client.hud.HudRenderer;
 import com.rkb.client.input.KeybindRegistry;
@@ -31,6 +33,7 @@ public class RkbClient implements ClientModInitializer {
         ModuleManager.init();
         KeybindRegistry.registerAll(ModuleManager.get());
         ConfigManager.load();
+        SkinSetStore.load();
         WaypointStore.load();
         BadgeStore.load();
         CloudStore.load();
@@ -66,6 +69,7 @@ public class RkbClient implements ClientModInitializer {
     }
 
     private static int tickErrors = 0;
+    private static boolean skinSyncStarted;
 
     private static void onTick(MinecraftClient mc) {
         if (mc.options == null) {
@@ -77,6 +81,10 @@ public class RkbClient implements ClientModInitializer {
                 started = true;
                 KeybindRegistry.reapplyPinnedKeys();
                 manager.activateLoaded(mc);
+                if (!skinSyncStarted && mc.player != null) {
+                    skinSyncStarted = true;
+                    SkinCloudSync.refresh();
+                }
             }
             manager.tick(mc);
             KeybindRegistry.tick(mc);
