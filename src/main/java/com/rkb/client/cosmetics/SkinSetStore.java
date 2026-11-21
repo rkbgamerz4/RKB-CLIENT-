@@ -13,9 +13,14 @@ import net.minecraft.client.texture.NativeImage;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -278,45 +283,107 @@ public final class SkinSetStore {
             if (size > SkinRules.MAX_BYTES) {
                 return "That PNG is larger than 256 KB.";
             }
-            byte[] data = Files.readAllBytes(source);
-            String problem = SkinRules.validatePng(data);
-            if (!problem.isEmpty()) {
-                return problem;
-            }
-            String sha = AssetRules.sha256Hex(data);
-            synchronized (LOCK) {
-                for (SkinSet s : SETS) {
-                    if (s.sha256().equals(sha)) {
-                        return "That skin is already saved as " + s.name() + ".";
-                    }
-                }
-                if (SETS.size() >= SkinRules.MAX_SETS) {
-                    return "You can save at most " + SkinRules.MAX_SETS + " skin sets.";
-                }
-            }
-            String model = detectModel(data);
-            String id = UUID.randomUUID().toString();
-            String name = uniqueName(nameFrom(source.getFileName().toString()));
-            Path target = filesDir().resolve(id + ".png");
-            Files.createDirectories(filesDir());
-            Files.write(target, data);
-            long now = System.currentTimeMillis();
-            SkinSet set = new SkinSet(id, name, model, target.getFileName().toString(), sha, data.length, "", now);
-            synchronized (LOCK) {
-                SETS.add(0, set);
-                sort();
-                if (activeId.isEmpty()) {
-                    activeId = id;
-                }
-                save();
-            }
-            SkinTexturesCache.ensureBytes(sha, data);
-            PlayerTextures.clearResults();
-            return "Saved " + name + " (" + SkinRules.label(model) + ").";
+            return importBytes(Files.readAllBytes(source), source.getFileName() == null ? "skin.png"
+                    : source.getFileName().toString());
         } catch (Exception e) {
             RkbClient.LOGGER.warn("Skin import failed: {}", e.toString());
             return "Could not read that skin: " + e.getMessage();
         }
+    }
+
+    /** Validates and stores skin bytes. Shared by local files and direct HTTPS image imports. */
+    private static String importBytes(byte[] data, String fileName) {
+        String problem = SkinRules.validatePng(data);
+        if (!problem.isEmpty()) {
+            return problem;
+        }
+        String sha = AssetRules.sha256Hex(data);
+        synchronized (LOCK) {
+            for (SkinSet s : SETS) {
+                if (s.sha256().equals(sha)) {
+                    return "That skin is already saved as " + s.name() + ".";
+                }
+            }
+            if (SETS.size() >= SkinRules.MAX_SETS) {
+                return "You can save at most " + SkinRules.MAX_SETS + " skin sets.";
+            }
+        }
+        String model = detectModel(data);
+        String id = UUID.randomUUID().toString();
+        String name = uniqueName(nameFrom(fileName));
+        String file = id + ".png";
+        try {
+            Files.createDirectories(filesDir());
+            Files.write(filesDir().resolve(file), data);
+        } catch (IOException e) {
+            return "Could not save that skin: " + e.getMessage();
+        }
+        SkinSet set = new SkinSet(id, name, model, file, sha, data.length, "", System.currentTimeMillis());
+        synchronized (LOCK) {
+            SETS.add(0, set);
+            sort();
+            if (activeId.isEmpty()) {
+                activeId = id;
+            }
+            save();
+            bump();
+        }
+        SkinTexturesCache.ensureBytes(sha, data);
+        PlayerTextures.clearResults();
+        return "Saved " + name + " (" + SkinRules.label(model) + ").";
+    }
+
+    /**
+     * Imports a direct HTTPS PNG URL into the local library. HTTPS only, no redirects, 256 KB limit and the same PNG
+     * validation as a local file. Nothing is sent to Supabase or stored outside the local skin library.
+     */
+    public static void importUrl(String input) {
+        String s = input == null ? "" : input.trim();
+        URI uri;
+        try {
+            uri = URI.create(s);
+        } catch (RuntimeException e) {
+            say("That is not a valid image URL.");
+            return;
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getHost().isEmpty()
+                || uri.getUserInfo() != null) {
+            say("Use a direct https:// PNG URL.");
+            return;
+        }
+        if (busy) {
+            say("One moment, still saving the previous skin...");
+            return;
+        }
+        busy = true;
+        bump();
+        CloudService.background(() -> {
+            try {
+                HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12)).GET().build();
+                HttpResponse<InputStream> res = CloudService.HTTP.send(req, HttpResponse.BodyHandlers.ofInputStream());
+                if (res.statusCode() != 200) {
+                    say("The image server returned HTTP " + res.statusCode() + ".");
+                    return;
+                }
+                byte[] data;
+                try (InputStream in = res.body()) {
+                    data = in.readNBytes(SkinRules.MAX_BYTES + 1);
+                }
+                if (data.length > SkinRules.MAX_BYTES) {
+                    say("That image is larger than 256 KB.");
+                    return;
+                }
+                String path = uri.getPath() == null ? "skin.png" : uri.getPath();
+                String fileName = path.substring(path.lastIndexOf('/') + 1);
+                say(importBytes(data, fileName.isEmpty() ? "skin.png" : fileName));
+            } catch (Exception e) {
+                RkbClient.LOGGER.warn("Skin URL import failed: {}", e.toString());
+                say("Could not import that image URL.");
+            } finally {
+                busy = false;
+                bump();
+            }
+        });
     }
 
     /** Used by SkinCloudSync after a verified remote download. */
@@ -452,7 +519,7 @@ public final class SkinSetStore {
         say("Removed your RKB skin. Your normal Minecraft skin is shown again.");
     }
 
-    /** The Save and Apply button: persist, apply and (when eligible) push the set to the verified account. */
+    /** The Save and Apply button applies the selected set on this client; V2 has no skin upload action. */
     public static void saveAndApply() {
         SkinSet active = activeSet();
         if (active == null) {
@@ -462,11 +529,7 @@ public final class SkinSetStore {
         SkinTexturesCache.retry(active.sha256());
         SkinTexturesCache.ensureLocal(active.sha256(), fileOf(active));
         PlayerTextures.clearResults();
-        SkinCloudSync.refresh();
-        SkinCloudSync.equip(active);
-        say(SkinCloudSync.eligible()
-                ? "Saved. Applying " + active.name() + " and syncing with your verified RKB account."
-                : "Saved locally. Link this Minecraft account to sync with other RKB CLIENT players.");
+        say("Saved and applied " + active.name() + " locally. Skin cloud upload is not available in V2.");
     }
 
     /** New RKB account or Minecraft UUID: keep the files, but forget remote ids from the previous identity. */

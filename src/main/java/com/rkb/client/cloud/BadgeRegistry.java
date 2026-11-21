@@ -31,6 +31,11 @@ public final class BadgeRegistry {
         CHECKED.clear();
     }
 
+    /** Replaces the verified RKB identity set supplied by the V2 lookup. Never called from the render thread. */
+    public static synchronized void replaceEligible(Set<UUID> verified) {
+        eligible = verified == null ? Set.of() : Set.copyOf(verified);
+    }
+
     /** UUIDs from 'visible' that were not checked in the last five minutes. */
     static synchronized List<UUID> needCheck(Collection<UUID> visible, long nowMs) {
         List<UUID> out = new ArrayList<>();

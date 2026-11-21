@@ -18,11 +18,13 @@ import java.nio.file.attribute.PosixFilePermissions;
  * Never put the service_role key here.
  */
 public final class CloudStore {
-    public static final String DEFAULT_URL = "https://gnficbdfqukyubdeqgjt.supabase.co";
+    public static final String DEFAULT_URL = "https://uoghboucoajkpbgyfxsf.supabase.co";
+    public static final String DEFAULT_PUBLISHABLE_KEY = "sb_publishable_sH2LXAAtH1r8ciqiPTfaSQ_ATYLpxkB";
+    private static final String LEGACY_URL = "https://gnficbdfqukyubdeqgjt.supabase.co";
 
     static class Data {
         String supabaseUrl = DEFAULT_URL;
-        String anonKey = "";
+        String anonKey = DEFAULT_PUBLISHABLE_KEY;
         String accessToken = "";
         String refreshToken = "";
         long expiresAtMs;
@@ -55,16 +57,21 @@ public final class CloudStore {
             Data loaded = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), Data.class);
             if (loaded != null) {
                 d = loaded;
-                if (d.supabaseUrl == null || !d.supabaseUrl.startsWith("https://")) {
+                boolean legacy = d.supabaseUrl != null && d.supabaseUrl.equals(LEGACY_URL);
+                if (d.supabaseUrl == null || !d.supabaseUrl.startsWith("https://") || legacy) {
                     d.supabaseUrl = DEFAULT_URL;
                 }
                 d.anonKey = nz(d.anonKey);
+                if (legacy || d.anonKey.isEmpty()) {
+                    d.anonKey = DEFAULT_PUBLISHABLE_KEY;
+                }
                 d.accessToken = nz(d.accessToken);
                 d.refreshToken = nz(d.refreshToken);
                 d.userId = nz(d.userId);
                 d.email = nz(d.email);
                 d.linkedUuid = nz(d.linkedUuid);
                 d.linkedName = nz(d.linkedName);
+                save();
             }
         } catch (Exception e) {
             RkbClient.LOGGER.warn("Cloud config is unreadable ({}); using defaults.", e.toString());

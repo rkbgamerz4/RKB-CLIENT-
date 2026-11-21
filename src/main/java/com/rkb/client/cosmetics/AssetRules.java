@@ -48,7 +48,8 @@ public final class AssetRules {
         return baseUrl + "/storage/v1/object/public/rkb-cosmetics/" + path;
     }
 
-    static byte[] utf8(String s) {
+    /** UTF-8 bytes used for local server hashing. */
+    public static byte[] utf8(String s) {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 }

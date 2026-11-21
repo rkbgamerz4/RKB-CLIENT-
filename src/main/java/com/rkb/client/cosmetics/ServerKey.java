@@ -28,4 +28,13 @@ public final class ServerKey {
         }
         return ALLOWED.matcher(s).matches() ? s : null;
     }
+
+    /**
+     * SHA-256 of the normalized address. This is the only value sent to the backend for presence/lookup; the raw
+     * address stays on this device. Returns null when the address cannot be normalized.
+     */
+    public static String sha256Hex(String address) {
+        String normalized = normalize(address);
+        return normalized == null ? null : AssetRules.sha256Hex(AssetRules.utf8(normalized));
+    }
 }

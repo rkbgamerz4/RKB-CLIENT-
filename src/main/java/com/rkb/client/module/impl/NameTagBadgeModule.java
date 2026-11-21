@@ -3,6 +3,7 @@ package com.rkb.client.module.impl;
 import com.rkb.client.cloud.BadgeRegistry;
 import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.FriendsManager;
+import com.rkb.client.cosmetics.RemoteCosmetics;
 import com.rkb.client.gui.FriendsScreen;
 import com.rkb.client.module.Category;
 import com.rkb.client.module.Module;
@@ -108,6 +109,9 @@ public class NameTagBadgeModule extends Module {
             return false;
         }
         UUID id = player.getUuid();
+        if (!RemoteCosmetics.isRkbClient(id)) {
+            return false;   // a name prefix is never drawn for an unverified identity
+        }
         if (FriendsManager.isFriend(id)) {
             return true;
         }

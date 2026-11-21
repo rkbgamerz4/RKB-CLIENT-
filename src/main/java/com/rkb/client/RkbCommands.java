@@ -17,8 +17,9 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
  * /rkb friend add|remove <player or UUID>, /rkb friend list
  * /rkb badge add|remove|list   same as friend (kept from version 0.7)
  * /rkb cloud register|login <email> <password> | logout | link | sync | status | cosmetics
- * /rkb cosmetics list|inventory|history|refresh|open|claim <id>|buy <id>|redeem <code>|equip <id>|unequip <slot>
- * Client commands are not sent to the server, but never type your password on a shared screen.
+ * /rkb cosmetics list|inventory|refresh|open|redeem <code>|equip <id>|unequip <slot>
+ * history/claim/buy are kept only to report that RKB Cosmetics V2 has no such actions.
+ * Client commands are not sent to the game server, but never type your password on a shared screen.
  */
 public final class RkbCommands {
     private RkbCommands() {
@@ -146,18 +147,7 @@ public final class RkbCommands {
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("history").executes(ctx -> {
-                    var st = CosmeticsManager.state();
-                    int n = 0;
-                    for (var h : st.history()) {
-                        if (n++ >= 10) {
-                            break;
-                        }
-                        CloudService.notifyPlayer(h.createdAt().substring(0, Math.min(10, h.createdAt().length())) + " | " + h.cosmeticId()
-                                + " | " + h.kind() + " | " + h.status());
-                    }
-                    if (n == 0) {
-                        CloudService.notifyPlayer("No history yet.");
-                    }
+                    CloudService.notifyPlayer("RKB Cosmetics V2 has no history action. Use /rkb cosmetics inventory.");
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("refresh").executes(ctx -> {

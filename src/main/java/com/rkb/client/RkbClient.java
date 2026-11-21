@@ -5,7 +5,6 @@ import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.CloudStore;
 import com.rkb.client.cloud.FriendsManager;
 import com.rkb.client.config.ConfigManager;
-import com.rkb.client.cosmetics.SkinCloudSync;
 import com.rkb.client.cosmetics.SkinSetStore;
 import com.rkb.client.gui.RkbMenuScreen;
 import com.rkb.client.hud.HudRenderer;
@@ -23,6 +22,7 @@ import org.slf4j.LoggerFactory;
 public class RkbClient implements ClientModInitializer {
     public static final String MOD_ID = "rkbclient";
     public static final String NAME = "RKB CLIENT";
+    public static final String VERSION = "0.9.0";
     public static final Logger LOGGER = LoggerFactory.getLogger(NAME);
 
     private static boolean started = false;
@@ -69,7 +69,6 @@ public class RkbClient implements ClientModInitializer {
     }
 
     private static int tickErrors = 0;
-    private static boolean skinSyncStarted;
 
     private static void onTick(MinecraftClient mc) {
         if (mc.options == null) {
@@ -81,10 +80,6 @@ public class RkbClient implements ClientModInitializer {
                 started = true;
                 KeybindRegistry.reapplyPinnedKeys();
                 manager.activateLoaded(mc);
-                if (!skinSyncStarted && mc.player != null) {
-                    skinSyncStarted = true;
-                    SkinCloudSync.refresh();
-                }
             }
             manager.tick(mc);
             KeybindRegistry.tick(mc);

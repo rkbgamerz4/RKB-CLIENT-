@@ -10,6 +10,7 @@ import com.rkb.client.RkbClient;
 import com.rkb.client.cloud.CloudException;
 import com.rkb.client.cloud.CloudService;
 import com.rkb.client.cloud.CloudStore;
+import com.rkb.client.cloud.CosmeticsV2Api;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 
@@ -19,28 +20,35 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
- * The signed-in RKB account's catalog, inventory, equipment and purchase history.
+ * The signed-in RKB account's V2 catalog, inventory and equipment.
  *
- * The server is the only authority. This class never grants, prices or "unlocks" anything: it sends an action
- * (claim, redeem, equip ...) and shows what the server answered. The data it keeps is a cache that belongs to exactly
- * one account (AccountCache), is replaced on every account change and is deleted on sign-out.
+ * Only the deployed {@code rkb-cosmetics-v2} function can grant, own or equip anything. This class keeps a short-lived
+ * display cache, expires it when it is stale, and never invents an id, asset path, hash or ownership flag.
  */
 public final class CosmeticsManager {
     public record Item(String id, String name, String description, String type, String rarity, int priceCents,
                        String currency, boolean claimable, String purchaseInfo, String assetPath, String assetSha,
-                       String badgeKey, boolean owned) {
+                       String badgeKey, boolean owned, boolean active, boolean assetReady) {
+        public boolean usable() {
+            return owned && active && assetReady;
+        }
     }
 
+    /** V2 has no history action; kept so existing callers can display an empty list. */
     public record Entry(String cosmeticId, String kind, String status, int amountCents, String currency,
                         String reference, String createdAt) {
     }
 
-    public record State(String rkbId, List<Item> items, Map<String, String> equipped, List<Entry> history, long fetchedMs) {
+    public record State(String rkbId, List<Item> items, Map<String, String> equipped, List<Entry> history,
+                        long fetchedMs) {
     }
 
     private static final State EMPTY = new State("", List.of(), Map.of(), List.of(), 0);
@@ -61,6 +69,7 @@ public final class CosmeticsManager {
 
     // ------------------------------------------------------------------ reads (UI)
 
+    /** Never returns expired remote data. Local skins and bundled cape textures are independent of this cache. */
     public static State state() {
         String user = CloudStore.userId();
         State s = CACHE.get(user);
@@ -68,7 +77,16 @@ public final class CosmeticsManager {
             diskTriedFor = user;
             s = loadDisk(user);
         }
-        return s == null ? EMPTY : s;
+        return s == null || stale(s) ? EMPTY : s;
+    }
+
+    public static boolean stale() {
+        State s = CACHE.get(CloudStore.userId());
+        return s != null && stale(s);
+    }
+
+    private static boolean stale(State s) {
+        return CosmeticsV2Api.expired(s.fetchedMs(), System.currentTimeMillis(), CosmeticsV2Api.ACCOUNT_TTL_MS);
     }
 
     public static boolean busy() {
@@ -102,6 +120,7 @@ public final class CosmeticsManager {
     public static void onSignedOut() {
         CACHE.clear();
         diskTriedFor = "";
+        message = "";
         RemoteCosmetics.setSelf(null);
         try {
             Files.deleteIfExists(file());
@@ -112,7 +131,51 @@ public final class CosmeticsManager {
         version++;
     }
 
-    // ------------------------------------------------------------------ actions (all go to the server)
+    // ------------------------------------------------------------------ V2 data and actions
+
+    /** Called by {@link CloudService} after a successful catalog + inventory fetch. */
+    public static void applyV2(String account, List<CosmeticsV2Api.CatalogItem> catalog,
+                        CosmeticsV2Api.Inventory inventory, String linkedUuid) {
+        if (account.isEmpty() || !account.equals(CloudStore.userId())) {
+            return;
+        }
+        List<Item> items = new ArrayList<>();
+        Map<String, Item> byId = new HashMap<>();
+        for (CosmeticsV2Api.CatalogItem c : catalog) {
+            Item item = new Item(c.id(), emptyTo(c.name(), c.id()), c.description(), c.type(), c.rarity(),
+                    c.priceCents(), emptyTo(c.currency(), "USD"), c.claimable(), "", c.assetPath(), c.assetSha(),
+                    c.badgeKey(), inventory.owned().contains(c.id()), c.active(), c.assetReady());
+            items.add(item);
+            byId.put(item.id(), item);
+        }
+        // Bundled designs stay visible for reference, but a missing catalog row never grants or activates them.
+        for (CapeCollection.Design d : CapeCollection.all()) {
+            if (!byId.containsKey(d.id())) {
+                Item fallback = new Item(d.id(), d.name(), d.description(), "cape", d.rarity(), 0, "USD", false,
+                        "", "", CapeCollection.bundledSha(d.id()), "", false, false,
+                        CapeCollection.bundledSha(d.id()) != null);
+                items.add(fallback);
+                byId.put(fallback.id(), fallback);
+            }
+        }
+
+        Map<String, String> equipped = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : inventory.equipped().entrySet()) {
+            String slot = normalizeSlot(e.getKey());
+            Item item = byId.get(e.getValue());
+            if (item != null && item.usable() && compatible(slot, item.type())) {
+                equipped.put(slot, item.id());
+            }
+        }
+
+        State st = new State(emptyTo(linkedUuid, ""), List.copyOf(items), Map.copyOf(equipped), List.of(),
+                System.currentTimeMillis());
+        CACHE.put(account, st);
+        saveDisk(account, st);
+        MinecraftClient.getInstance().execute(() -> RemoteCosmetics.setSelf(ownLook(st)));
+        message = "";
+        version++;
+    }
 
     public static void refresh() {
         if (!ready() || busy) {
@@ -122,14 +185,12 @@ public final class CosmeticsManager {
         version++;
         CloudService.background(() -> {
             try {
-                fetchAll();
-            } catch (CloudException e) {
-                say(e.status() == 401 ? "Your RKB session ended. Sign in again: /rkb cloud login <email> <password>"
-                        : "Could not load cosmetics: " + e.getMessage(), false);
-            } catch (IOException e) {
-                say("You are offline. Showing your last saved inventory.", false);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                CloudService.syncNow(false);
+                if (stale()) {
+                    say("Remote data is still unavailable. Local skins remain ready.", false);
+                }
+            } catch (Throwable t) {
+                say("Could not refresh cosmetics: " + t.getMessage(), false);
             } finally {
                 busy = false;
                 version++;
@@ -137,36 +198,32 @@ public final class CosmeticsManager {
         });
     }
 
-    public static void claim(String cosmeticId) {
-        act(body("claim", "cosmetic_id", cosmeticId), r -> "Claimed " + cosmeticId + ". It is now in your inventory.");
-    }
-
     public static void redeem(String code) {
-        act(body("redeem", "code", code), r -> "Code accepted. The cosmetic is now in your inventory.");
-    }
-
-    public static void purchaseStart(String cosmeticId) {
-        act(body("purchase_start", "cosmetic_id", cosmeticId), r -> {
-            String ref = r.has("reference") ? r.get("reference").getAsString() : "?";
-            String info = r.has("purchase_info") ? r.get("purchase_info").getAsString() : "";
-            return "Purchase started. Reference " + ref + ". " + (info.isEmpty() ? "Follow the shop's payment instructions and quote this reference." : info)
-                    + " It is added to your inventory only after the payment is confirmed.";
-        });
+        if (code == null || code.trim().isEmpty()) {
+            say("Enter a redeem code first.", true);
+            return;
+        }
+        act(CosmeticsV2Api.request(CosmeticsV2Api.REDEEM, "code", code.trim()),
+                r -> "Code accepted. Refreshing your inventory.");
     }
 
     public static void equip(String cosmeticId) {
-        act(body("equip", "cosmetic_id", cosmeticId), r -> "Equipped " + cosmeticId + ".");
+        act(CosmeticsV2Api.request(CosmeticsV2Api.EQUIP, "cosmetic_id", cosmeticId),
+                r -> "Equipped " + cosmeticId + ".");
     }
 
     public static void unequip(String slot) {
-        act(body("unequip", "slot", slot), r -> "Unequipped your " + slot + ".");
+        act(CosmeticsV2Api.request(CosmeticsV2Api.UNEQUIP, "slot", normalizeSlot(slot)),
+                r -> "Unequipped your " + normalizeSlot(slot) + ".");
     }
 
-    private static JsonObject body(String action, String key, String value) {
-        JsonObject b = new JsonObject();
-        b.addProperty("action", action);
-        b.addProperty(key, value);
-        return b;
+    /** V2 does not expose claim/purchase_start. Kept only so old callers get a truthful answer. */
+    public static void claim(String cosmeticId) {
+        say("RKB Cosmetics V2 has no claim action. Use Redeem instead.", true);
+    }
+
+    public static void purchaseStart(String cosmeticId) {
+        say("RKB Cosmetics V2 has no purchase action in this client.", true);
     }
 
     private static void act(JsonObject body, Function<JsonObject, String> okMessage) {
@@ -182,18 +239,18 @@ public final class CosmeticsManager {
         version++;
         CloudService.background(() -> {
             try {
-                JsonObject res = CloudService.callFunction("rkb-cosmetics", body);
-                if (res.has("ok") && !res.get("ok").getAsBoolean()) {
-                    say(errorText(res.has("error") ? res.get("error").getAsString() : "failed"), true);
+                JsonObject res = CloudService.callV2(body);
+                if (!CosmeticsV2Api.ok(res)) {
+                    say(errorText(CosmeticsV2Api.error(res)), true);
                 } else {
                     say(okMessage.apply(res), true);
-                    fetchAll();
+                    CloudService.syncNow(false);
                 }
             } catch (CloudException e) {
                 say(e.status() == 429 ? errorText("rate_limited") : e.status() == 401
-                        ? "Sign in first: /rkb cloud login <email> <password>" : "That did not work: " + e.getMessage(), true);
+                        ? "Your RKB session ended. Sign in again." : errorText(e.getMessage()), true);
             } catch (IOException e) {
-                say("You are offline. Try again when you are connected.", true);
+                say("You are offline. No cloud change was made.", true);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
@@ -204,20 +261,17 @@ public final class CosmeticsManager {
     }
 
     static String errorText(String code) {
-        return switch (code) {
-            case "not_found" -> "That cosmetic does not exist or is not available.";
-            case "not_available" -> "That cosmetic is not available right now.";
-            case "not_claimable" -> "That cosmetic is not free. Use Buy to see how to get it.";
-            case "use_claim" -> "That cosmetic is free: use Claim.";
-            case "already_owned" -> "You already own that cosmetic.";
+        return switch (code == null ? "" : code) {
+            case "not_found", "unknown_cosmetic" -> "That cosmetic does not exist or is not available.";
+            case "not_available", "inactive" -> "That cosmetic is not available right now.";
             case "not_owned" -> "You do not own that cosmetic.";
+            case "asset_unavailable" -> "The backend asset for that cosmetic is not ready.";
             case "invalid_or_used_code" -> "That code is not valid, was already used or has expired.";
-            case "rate_limited" -> "Slow down a little and try again.";
-            case "identity_not_verified" -> "Link this Minecraft account with /rkb cloud link first.";
-            case "name_taken" -> "A cloud skin set with that name already exists.";
-            case "set_limit" -> "You reached the 20 skin-set limit for this Minecraft account.";
-            case "invalid_skin" -> "The server rejected that skin image.";
-            default -> "Something went wrong (" + code + ").";
+            case "rate_limited", "too_many_requests" -> "Slow down a little and try again.";
+            case "identity_not_verified", "not_linked", "link_required" ->
+                    "Link this Minecraft account with /rkb cloud link first.";
+            case "signed_out" -> "Your RKB session ended. Sign in again.";
+            default -> "Something went wrong (" + (code == null || code.isEmpty() ? "request_failed" : code) + ").";
         };
     }
 
@@ -229,92 +283,28 @@ public final class CosmeticsManager {
         }
     }
 
-    // ------------------------------------------------------------------ fetching (cloud thread)
-
-    private static JsonObject call(String action) throws CloudException, IOException, InterruptedException {
-        JsonObject b = new JsonObject();
-        b.addProperty("action", action);
-        return CloudService.callFunction("rkb-cosmetics", b);
-    }
-
-    private static void fetchAll() throws CloudException, IOException, InterruptedException {
-        String user = CloudStore.userId();
-        String rkbId = str(call("account"), "rkb_id");
-        JsonObject cat = call("catalog");
-        JsonObject inv = call("inventory");
-        JsonObject his = call("history");
-        if (!user.equals(CloudStore.userId())) {
-            return;   // another account signed in meanwhile: never show these results for it
-        }
-        List<Item> items = new ArrayList<>();
-        if (cat.has("items") && cat.get("items").isJsonArray()) {
-            for (JsonElement e : cat.getAsJsonArray("items")) {
-                if (e.isJsonObject()) {
-                    items.add(parseItem(e.getAsJsonObject()));
-                }
-            }
-        }
-        Map<String, String> equipped = new HashMap<>();
-        if (inv.has("equipped") && inv.get("equipped").isJsonArray()) {
-            for (JsonElement e : inv.getAsJsonArray("equipped")) {
-                if (e.isJsonObject()) {
-                    equipped.put(str(e.getAsJsonObject(), "slot"), str(e.getAsJsonObject(), "cosmetic_id"));
-                }
-            }
-        }
-        List<Entry> history = new ArrayList<>();
-        if (his.has("entries") && his.get("entries").isJsonArray()) {
-            for (JsonElement e : his.getAsJsonArray("entries")) {
-                if (e.isJsonObject()) {
-                    JsonObject o = e.getAsJsonObject();
-                    history.add(new Entry(str(o, "cosmetic_id"), str(o, "kind"), str(o, "status"), num(o, "amount_cents"),
-                            str(o, "currency"), str(o, "reference"), str(o, "created_at")));
-                }
-            }
-        }
-        State st = new State(rkbId, List.copyOf(items), Map.copyOf(equipped), List.copyOf(history), System.currentTimeMillis());
-        CACHE.put(user, st);
-        saveDisk(user, st);
-        RemoteCosmetics.Look own = ownLook(st);
-        MinecraftClient.getInstance().execute(() -> RemoteCosmetics.setSelf(own));
-        message = "";
-    }
-
     static RemoteCosmetics.Look ownLook(State st) {
         Item cape = find(st, st.equipped().get("cape"));
         Item badge = find(st, st.equipped().get("badge"));
-        String sha = cape != null && AssetRules.validSha(cape.assetSha()) && AssetRules.validPath(cape.assetPath()) ? cape.assetSha() : null;
-        String key = badge != null && BadgeGlyphs.supported(badge.badgeKey()) ? badge.badgeKey() : null;
+        if ((cape == null || !cape.usable()) && (badge == null || !badge.usable())) {
+            return null;
+        }
+        String capeId = cape == null ? null : cape.id();
+        String path = cape == null ? null : cape.assetPath();
+        String sha = cape != null && cape.usable() && AssetRules.validSha(cape.assetSha()) ? cape.assetSha() : null;
+        String key = badge != null && badge.usable() && BadgeGlyphs.supported(badge.badgeKey())
+                ? badge.badgeKey() : null;
         if (sha == null && key == null) {
             return null;
         }
-        // The local player's skin comes from SkinSetStore; the remote skin fields stay empty for the account look.
-        return new RemoteCosmetics.Look(cape == null ? null : cape.id(), sha == null ? null : cape.assetPath(), sha, key,
-                null, null, null, null, true, false);
+        // The local player's skin comes from SkinSetStore; remote skin fields stay empty for the account look.
+        return new RemoteCosmetics.Look(capeId, path, sha, key, null, null, null, null, true, false);
     }
 
-    /**
-     * The catalog plus the ten official capes. An official cape that is not in the server catalog is still shown, but
-     * as "not owned" and with no claim/equip action. That is deliberate: the client never invents ownership.
-     */
+    // ------------------------------------------------------------------ collection helpers
+
     public static List<Item> collection() {
-        State st = state();
-        List<Item> out = new ArrayList<>();
-        for (CapeCollection.Design d : CapeCollection.all()) {
-            Item server = find(st, d.id());
-            if (server != null) {
-                out.add(server);
-            } else {
-                out.add(new Item(d.id(), d.name(), d.description(), "cape", d.rarity(), 0, "USD", false,
-                        "", "", "", "", false));
-            }
-        }
-        for (Item i : st.items()) {
-            if (!CapeCollection.isOfficial(i.id())) {
-                out.add(i);
-            }
-        }
-        return List.copyOf(out);
+        return state().items();
     }
 
     public static Item item(String id) {
@@ -331,7 +321,7 @@ public final class CosmeticsManager {
 
     public static Item equippedItem(String slot) {
         State st = state();
-        String id = st.equipped().get(slot);
+        String id = st.equipped().get(normalizeSlot(slot));
         return id == null ? null : find(st, id);
     }
 
@@ -339,7 +329,7 @@ public final class CosmeticsManager {
         if (id == null) {
             return false;
         }
-        return id.equals(state().equipped().get("cape")) || id.equals(state().equipped().get("badge"));
+        return state().equipped().containsValue(id);
     }
 
     public static List<Item> byType(String type) {
@@ -349,7 +339,29 @@ public final class CosmeticsManager {
                 out.add(i);
             }
         }
-        return out;
+        return List.copyOf(out);
+    }
+
+    public static List<Item> countryCapes() {
+        List<Item> out = new ArrayList<>();
+        for (Item i : byType("cape")) {
+            CapeCollection.Design d = CapeCollection.byId(i.id());
+            if (d != null && !"RKB".equals(d.country())) {
+                out.add(i);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    public static List<Item> originalCapes() {
+        List<Item> out = new ArrayList<>();
+        for (Item i : byType("cape")) {
+            CapeCollection.Design d = CapeCollection.byId(i.id());
+            if (d == null || "RKB".equals(d.country())) {
+                out.add(i);
+            }
+        }
+        return List.copyOf(out);
     }
 
     private static Item find(State st, String id) {
@@ -364,25 +376,25 @@ public final class CosmeticsManager {
         return null;
     }
 
-    private static Item parseItem(JsonObject o) {
-        return new Item(str(o, "id"), str(o, "name"), str(o, "description"), str(o, "type"), str(o, "rarity"),
-                num(o, "price_cents"), str(o, "currency"), bool(o, "claimable"), str(o, "purchase_info"),
-                str(o, "asset_path"), str(o, "asset_sha256"), str(o, "badge_key"), bool(o, "owned"));
+    private static String normalizeSlot(String slot) {
+        String s = slot == null ? "" : slot.trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (s) {
+            case "capes", "couture" -> "cape";
+            case "badges" -> "badge";
+            case "skins" -> "skin";
+            default -> s;
+        };
     }
 
-    private static String str(JsonObject o, String k) {
-        return o.has(k) && o.get(k).isJsonPrimitive() ? o.get(k).getAsString() : "";
+    private static boolean compatible(String slot, String type) {
+        return slot.isEmpty() || slot.equals(type);
     }
 
-    private static int num(JsonObject o, String k) {
-        return o.has(k) && o.get(k).isJsonPrimitive() && o.get(k).getAsJsonPrimitive().isNumber() ? o.get(k).getAsInt() : 0;
+    private static String emptyTo(String value, String fallback) {
+        return value == null || value.isEmpty() ? fallback : value;
     }
 
-    private static boolean bool(JsonObject o, String k) {
-        return o.has(k) && o.get(k).isJsonPrimitive() && o.get(k).getAsBoolean();
-    }
-
-    // ------------------------------------------------------------------ disk cache (display only, per account)
+    // ------------------------------------------------------------------ display cache (expires quickly)
 
     private static synchronized void saveDisk(String accountId, State st) {
         try {
@@ -400,36 +412,20 @@ public final class CosmeticsManager {
                 o.addProperty("rarity", i.rarity());
                 o.addProperty("price_cents", i.priceCents());
                 o.addProperty("currency", i.currency());
-                o.addProperty("claimable", i.claimable());
-                o.addProperty("purchase_info", i.purchaseInfo());
                 o.addProperty("asset_path", i.assetPath());
                 o.addProperty("asset_sha256", i.assetSha());
                 o.addProperty("badge_key", i.badgeKey());
                 o.addProperty("owned", i.owned());
+                o.addProperty("active", i.active());
+                o.addProperty("asset_ready", i.assetReady());
                 items.add(o);
             }
             root.add("items", items);
-            JsonArray eq = new JsonArray();
+            JsonObject eq = new JsonObject();
             for (Map.Entry<String, String> e : st.equipped().entrySet()) {
-                JsonObject o = new JsonObject();
-                o.addProperty("slot", e.getKey());
-                o.addProperty("cosmetic_id", e.getValue());
-                eq.add(o);
+                eq.addProperty(e.getKey(), e.getValue());
             }
             root.add("equipped", eq);
-            JsonArray his = new JsonArray();
-            for (Entry h : st.history()) {
-                JsonObject o = new JsonObject();
-                o.addProperty("cosmetic_id", h.cosmeticId());
-                o.addProperty("kind", h.kind());
-                o.addProperty("status", h.status());
-                o.addProperty("amount_cents", h.amountCents());
-                o.addProperty("currency", h.currency());
-                o.addProperty("reference", h.reference());
-                o.addProperty("created_at", h.createdAt());
-                his.add(o);
-            }
-            root.add("entries", his);
             Path f = file();
             Files.createDirectories(f.getParent());
             Files.writeString(f, GSON.toJson(root), StandardCharsets.UTF_8);
@@ -448,27 +444,63 @@ public final class CosmeticsManager {
             if (!accountId.equals(str(root, "accountId"))) {
                 return null;   // the cache belongs to another account: ignore it
             }
+            Set<String> owned = new LinkedHashSet<>();
             List<Item> items = new ArrayList<>();
-            for (JsonElement e : root.getAsJsonArray("items")) {
-                items.add(parseItem(e.getAsJsonObject()));
+            if (root.has("items") && root.get("items").isJsonArray()) {
+                for (JsonElement e : root.getAsJsonArray("items")) {
+                    JsonObject o = e.getAsJsonObject();
+                    String id = str(o, "id");
+                    if (id.isEmpty()) {
+                        continue;
+                    }
+                    boolean isOwned = bool(o, "owned");
+                    if (isOwned) {
+                        owned.add(id);
+                    }
+                    items.add(new Item(id, str(o, "name"), str(o, "description"), str(o, "type"), str(o, "rarity"),
+                            num(o, "price_cents"), str(o, "currency"), false, "", str(o, "asset_path"),
+                            str(o, "asset_sha256"), str(o, "badge_key"), isOwned,
+                            !o.has("active") || bool(o, "active"),
+                            !o.has("asset_ready") || bool(o, "asset_ready")));
+                }
             }
-            Map<String, String> equipped = new HashMap<>();
-            for (JsonElement e : root.getAsJsonArray("equipped")) {
-                equipped.put(str(e.getAsJsonObject(), "slot"), str(e.getAsJsonObject(), "cosmetic_id"));
+            Map<String, String> equipped = new LinkedHashMap<>();
+            if (root.has("equipped") && root.get("equipped").isJsonObject()) {
+                for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("equipped").entrySet()) {
+                    JsonElement value = e.getValue();
+                    String id = value.isJsonObject() ? str(value.getAsJsonObject(), "cosmetic_id")
+                            : value.isJsonPrimitive() ? value.getAsString() : "";
+                    if (!id.isEmpty()) {
+                        equipped.put(normalizeSlot(e.getKey()), id);
+                    }
+                }
+            } else if (root.has("equipped") && root.get("equipped").isJsonArray()) {
+                for (JsonElement e : root.getAsJsonArray("equipped")) {
+                    JsonObject o = e.getAsJsonObject();
+                    equipped.put(str(o, "slot"), str(o, "cosmetic_id"));
+                }
             }
-            List<Entry> history = new ArrayList<>();
-            for (JsonElement e : root.getAsJsonArray("entries")) {
-                JsonObject o = e.getAsJsonObject();
-                history.add(new Entry(str(o, "cosmetic_id"), str(o, "kind"), str(o, "status"), num(o, "amount_cents"),
-                        str(o, "currency"), str(o, "reference"), str(o, "created_at")));
-            }
-            State st = new State(str(root, "rkbId"), List.copyOf(items), Map.copyOf(equipped), List.copyOf(history),
-                    root.has("fetchedMs") ? root.get("fetchedMs").getAsLong() : 0);
+            State st = new State(str(root, "rkbId"), List.copyOf(items), Map.copyOf(equipped), List.of(),
+                    num(root, "fetchedMs"));
             CACHE.put(accountId, st);
             return st;
         } catch (Exception e) {
             RkbClient.LOGGER.warn("Cosmetics cache is unreadable ({}).", e.toString());
             return null;
         }
+    }
+
+    private static String str(JsonObject o, String k) {
+        return o != null && o.has(k) && o.get(k).isJsonPrimitive() ? o.get(k).getAsString() : "";
+    }
+
+    private static int num(JsonObject o, String k) {
+        return o.has(k) && o.get(k).isJsonPrimitive() && o.get(k).getAsJsonPrimitive().isNumber()
+                ? o.get(k).getAsInt() : 0;
+    }
+
+    private static boolean bool(JsonObject o, String k) {
+        return o.has(k) && o.get(k).isJsonPrimitive() && o.get(k).getAsJsonPrimitive().isBoolean()
+                && o.get(k).getAsBoolean();
     }
 }

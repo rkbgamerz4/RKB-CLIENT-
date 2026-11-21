@@ -63,16 +63,18 @@ public final class CapeTextures {
         return look == null || look.capeSha() == null ? null : bySha.get(look.capeSha());
     }
 
-    /** Starts a download if needed. Safe to call repeatedly. */
+    /** Starts a download only for a backend-supplied path; bundled capes use the shipped PNG. */
     public static void ensure(String id, String sha, String path) {
-        if (!AssetRules.validSha(sha) || !AssetRules.validPath(path)) {
+        if (!AssetRules.validSha(sha)) {
             return;
         }
         if (CapeCollection.matchesBundled(id, sha)) {
             ensureBuiltin(id);
             return;
         }
-        start(sha, id, false, path);
+        if (AssetRules.validPath(path)) {
+            start(sha, id, false, path);
+        }
     }
 
     /** Registers a bundled cape for the collection thumbnails and for the official cape ids. */

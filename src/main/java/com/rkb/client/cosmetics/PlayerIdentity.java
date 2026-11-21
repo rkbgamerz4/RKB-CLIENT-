@@ -75,12 +75,12 @@ public final class PlayerIdentity {
     /** Display-only. */
     public static String statusDetail() {
         if (!signedIn()) {
-            return "Capes, skins and skin sets work locally. Sign in and link this Minecraft account to use the cloud.";
+            return "Local skins, bundled capes and cached textures work offline. Sign in to use V2 account features.";
         }
         if (!verified()) {
             return "Run /rkb cloud link once to prove this Minecraft account. Until then only local cosmetics are used.";
         }
-        return "Cloud inventory and skin sync are enabled for this UUID.";
+        return "V2 inventory and redeem are enabled for this linked UUID. Skin uploads are not part of V2.";
     }
 
     public static String shortUuid() {
