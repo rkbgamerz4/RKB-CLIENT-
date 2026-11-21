@@ -2,6 +2,7 @@
 build/
 out/
 run/
+node_modules/
 .idea/
 *.iml
 .vscode/
