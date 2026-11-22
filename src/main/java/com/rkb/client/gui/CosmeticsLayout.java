@@ -67,7 +67,7 @@ public final class CosmeticsLayout {
         Rect preview;
         Rect list;
         if (compact) {
-            int previewH = clamp(content.height() * 2 / 5, 132, 190);
+            int previewH = clamp(content.height() * 45 / 100, 170, 230);
             preview = new Rect(content.x(), content.y(), content.width(), previewH);
             list = new Rect(content.x(), preview.bottom() + 8, content.width(),
                     Math.max(30, content.bottom() - preview.bottom() - 8));

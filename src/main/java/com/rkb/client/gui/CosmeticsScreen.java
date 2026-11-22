@@ -436,47 +436,56 @@ public class CosmeticsScreen extends Screen {
         ctx.fill(box.x() + 10, box.y() + 10, box.x() + 46, box.y() + 12, accent);
 
         SkinSelection selection = selectedSkin();
-        SkinSetStore.SkinSet set = SkinSetStore.byId(selectedSkinId);
         CosmeticsManager.Item cape = tab == TAB_CAPE ? selectedCapeItem() : CosmeticsManager.equippedItem("cape");
-
-        int modelBottom = box.bottom() - 54;
-        int drawBottom = Math.max(box.y() + 120, modelBottom - 4);
+        boolean customSkin = tab == TAB_SKIN && selection.custom();
+        String modelToggle = customSkin
+                ? (skinModelLabel(selection.model()).startsWith("Slim") ? "Classic" : "Slim")
+                : "";
+        int buttonY = box.bottom() - 30;
+        boolean wrapModel = false;
+        if (customSkin) {
+            int applyW = actionButtonWidth(tr, "Apply Skin");
+            int resetW = actionButtonWidth(tr, "Reset to Default");
+            int modelW = actionButtonWidth(tr, modelToggle);
+            wrapModel = box.right() - 8 - applyW - 6 - resetW - 6 - modelW < box.x() + 8;
+        }
+        int infoBottom = box.bottom() - (wrapModel ? 78 : customSkin ? 56 : 52);
+        int drawBottom = Math.max(box.y() + 72, infoBottom - 36);
         drawPlayerModel(ctx, new CosmeticsLayout.Rect(box.x() + 6, box.y() + 18, box.width() - 12,
                 drawBottom - box.y() - 18), selection, cape, tab == TAB_CAPE ? 0f : 180f, mx, my, delta);
 
         String skinLabel = selection.custom() ? selection.name() : "Minecraft default skin";
         String modelLabel = selection.custom() ? skinModelLabel(selection.model()) : "Vanilla Steve/Alex texture";
         String capeLabel = cape == null ? "No cape" : cape.name() + (CosmeticsManager.isEquipped(cape.id()) ? "  ·  equipped" : "");
-        ctx.drawText(tr, fit(tr, skinLabel, box.width() - 20), box.x() + 10, modelBottom - 22, Theme.TEXT, false);
-        ctx.drawText(tr, fit(tr, modelLabel, box.width() - 20), box.x() + 10, modelBottom - 10, Theme.MUTED, false);
-        ctx.drawText(tr, fit(tr, capeLabel, box.width() - 20), box.x() + 10, modelBottom + 2,
+        int labelY = Math.max(drawBottom + 2, infoBottom - 28);
+        ctx.drawText(tr, fit(tr, skinLabel, box.width() - 20), box.x() + 10, labelY, Theme.TEXT, false);
+        ctx.drawText(tr, fit(tr, modelLabel, box.width() - 20), box.x() + 10, labelY + 12, Theme.MUTED, false);
+        ctx.drawText(tr, fit(tr, capeLabel, box.width() - 20), box.x() + 10, labelY + 24,
                 cape != null && CosmeticsManager.isEquipped(cape.id()) ? accent : Theme.MUTED, false);
 
-        int buttonY = box.bottom() - 32;
         if (tab == TAB_SKIN) {
-            if (selection.custom()) {
-                int toggleW = Math.min(70, box.width() / 3);
-                String model = skinModelLabel(selection.model()).startsWith("Slim") ? "Classic" : "Slim";
-                actionButton(ctx, tr, model, box.x() + toggleW + 6, buttonY, true, false, () -> {
+            int right = box.right() - 8;
+            int applyX = actionButton(ctx, tr, "Apply Skin", right, buttonY, selection.custom(), true, selection.custom() ? () -> {
+                SkinSetStore.activate(selectedSkinId);
+                SkinSetStore.saveAndApply();
+                showToast("Skin applied locally.");
+            } : null);
+            int resetX = actionButton(ctx, tr, "Reset to Default", applyX - 6, buttonY,
+                    SkinSetStore.activeSet() != null, false, () -> {
+                        SkinSetStore.deactivate();
+                        selectedSkinId = "";
+                        showToast("Minecraft default skin restored.");
+                    });
+            if (customSkin) {
+                int modelY = wrapModel ? buttonY - 24 : buttonY;
+                int modelRight = wrapModel ? box.right() - 8 : resetX - 6;
+                actionButton(ctx, tr, modelToggle, modelRight, modelY, true, false, () -> {
                     String next = skinModelLabel(selection.model()).startsWith("Slim")
                             ? SkinRules.MODEL_CLASSIC : SkinRules.MODEL_SLIM;
                     SkinSetStore.setModel(selectedSkinId, next);
                     showToast("Skin model: " + SkinRules.label(next));
                 });
-                actionButton(ctx, tr, "Apply Skin", box.right() - 8, buttonY, true, true, () -> {
-                    SkinSetStore.activate(selectedSkinId);
-                    SkinSetStore.saveAndApply();
-                    showToast("Skin applied locally.");
-                });
-            } else {
-                actionButton(ctx, tr, "Apply Skin", box.right() - 8, buttonY, false, true, null);
             }
-            actionButton(ctx, tr, "Reset to Default", box.right() - 8 - actionButtonWidth(tr, "Apply Skin") - 22,
-                    buttonY, SkinSetStore.activeSet() != null, false, () -> {
-                        SkinSetStore.deactivate();
-                        selectedSkinId = "";
-                        showToast("Minecraft default skin restored.");
-                    });
         } else if (tab == TAB_CAPE) {
             boolean equipped = cape != null && CosmeticsManager.isEquipped(cape.id());
             actionButton(ctx, tr, "Remove Cape", box.right() - 8, buttonY,
