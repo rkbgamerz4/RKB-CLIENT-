@@ -87,4 +87,15 @@ public final class PlayerIdentity {
         String u = uuidString();
         return u.length() > 8 ? u.substring(0, 8) : (u.isEmpty() ? "offline" : u);
     }
+
+    public static String shortUuidFor(String rawUuid) {
+        if (rawUuid == null) {
+            return "unknown";
+        }
+        String s = rawUuid.replace("-", "").trim().toLowerCase(Locale.ROOT);
+        if (s.length() < 8) {
+            return "unknown";
+        }
+        return s.substring(0, 8);
+    }
 }

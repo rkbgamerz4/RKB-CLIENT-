@@ -58,6 +58,7 @@ public final class CosmeticsManager {
     private static volatile boolean busy;
     private static volatile int version;
     private static volatile String message = "";
+    private static volatile boolean lastResultOk;
     private static String diskTriedFor = "";
 
     private CosmeticsManager() {
@@ -99,6 +100,11 @@ public final class CosmeticsManager {
 
     public static String message() {
         return message;
+    }
+
+    /** True only for the most recent V2 action that the backend actually accepted. */
+    public static boolean lastResultOk() {
+        return lastResultOk;
     }
 
     public static boolean ready() {
@@ -241,9 +247,9 @@ public final class CosmeticsManager {
             try {
                 JsonObject res = CloudService.callV2(body);
                 if (!CosmeticsV2Api.ok(res)) {
-                    say(errorText(CosmeticsV2Api.error(res)), true);
+                    say(errorText(CosmeticsV2Api.error(res)), true, false);
                 } else {
-                    say(okMessage.apply(res), true);
+                    say(okMessage.apply(res), true, true);
                     CloudService.syncNow(false);
                 }
             } catch (CloudException e) {
@@ -276,7 +282,12 @@ public final class CosmeticsManager {
     }
 
     private static void say(String text, boolean chat) {
+        say(text, chat, false);
+    }
+
+    private static void say(String text, boolean chat, boolean ok) {
         message = text;
+        lastResultOk = ok;
         version++;
         if (chat) {
             CloudService.notifyPlayer(text);

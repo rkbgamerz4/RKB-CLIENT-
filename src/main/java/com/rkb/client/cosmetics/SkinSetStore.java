@@ -490,6 +490,27 @@ public final class SkinSetStore {
         say("Deleted " + old.name() + ".");
     }
 
+    /** Changes the Classic/Slim model of a saved set without touching its PNG or changing the active skin. */
+    public static void setModel(String id, String model) {
+        if (!SkinRules.validModel(model)) {
+            say("Choose Classic (Steve) or Slim (Alex).");
+            return;
+        }
+        SkinSet old = byId(id);
+        if (old == null || old.model().equals(model)) {
+            return;
+        }
+        SkinSet updated = new SkinSet(old.id(), old.name(), model, old.file(), old.sha256(), old.size(),
+                old.remoteId(), System.currentTimeMillis());
+        synchronized (LOCK) {
+            replaceLocked(updated);
+            save();
+            bump();
+        }
+        PlayerTextures.clearResults();
+        say(old.name() + " is now " + SkinRules.label(model) + ".");
+    }
+
     public static void activate(String id) {
         SkinSet set = byId(id);
         if (set == null) {
