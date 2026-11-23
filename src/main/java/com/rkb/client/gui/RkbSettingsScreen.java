@@ -83,23 +83,28 @@ public class RkbSettingsScreen extends Screen {
         shell = RkbSidebar.draw(ctx, textRenderer, width, height, mouseX, mouseY, RkbSidebar.NavAction.RKB_SETTINGS, (r,a) -> hits.add(new Hit(r,a)));
         TextRenderer tr = textRenderer;
         RkbUi.Rect c = shell.content();
-        ctx.drawText(tr, RkbUi.menuText("RKB Settings"), c.x(), c.y(), RkbUi.TEXT, false);
-        ctx.drawText(tr, RkbUi.menuText("Tune the client, not the game."), c.x(), c.y() + 12, RkbUi.MUTED, false);
+        float titleScale = 1.45f;
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().translate(c.x(), c.y());
+        ctx.getMatrices().scale(titleScale, titleScale);
+        ctx.drawText(tr, RkbUi.menuText("RKB Settings"), 0, 0, RkbUi.TEXT, false);
+        ctx.getMatrices().popMatrix();
+        ctx.drawText(tr, RkbUi.menuText("Tune the client, not the game."), c.x(), c.y() + 13, RkbUi.MUTED, false);
         int searchW = Math.min(220, Math.max(140, c.width() / 4));
         search.setX(c.right() - searchW);
         search.setY(c.y() + 2);
         search.setWidth(searchW);
 
-        int leftW = Math.min(170, Math.max(120, c.width() * 22 / 100));
-        RkbUi.Rect left = new RkbUi.Rect(c.x(), c.y() + 30, leftW, c.bottom() - c.y() - 38);
-        RkbUi.Rect right = new RkbUi.Rect(left.right() + 12, c.y() + 30, c.width() - leftW - 12, left.height());
+        int leftW = Math.min(180, Math.max(120, c.width() * 23 / 100));
+        RkbUi.Rect left = new RkbUi.Rect(c.x(), c.y() + 34, leftW, c.bottom() - c.y() - 42);
+        RkbUi.Rect right = new RkbUi.Rect(left.right() + 12, c.y() + 34, c.width() - leftW - 12, left.height());
         ctx.fill(left.x(), left.y(), left.right(), left.bottom(), RkbUi.SURFACE);
         drawBorder(ctx, left, RkbUi.LINE);
         for (int i = 0; i < CATS.length; i++) {
-            RkbUi.Rect r = new RkbUi.Rect(left.x() + 6, left.y() + 8 + i * 28, left.width() - 12, 24);
+            RkbUi.Rect r = new RkbUi.Rect(left.x() + 6, left.y() + 8 + i * 30, left.width() - 12, 26);
             boolean sel = cat == i;
             if (sel) { ctx.fill(r.x(), r.y(), r.right(), r.bottom(), RkbUi.SURFACE_3); ctx.fill(r.x(), r.y()+4, r.x()+2, r.bottom()-4, RkbUi.CHROME_ACCENT); }
-            ctx.drawText(tr, CATS[i], r.x() + 10, r.y() + 8, sel ? RkbUi.TEXT : RkbUi.MUTED, false);
+            ctx.drawText(tr, CATS[i], r.x() + 10, r.y() + 9, sel ? RkbUi.TEXT : RkbUi.MUTED, false);
             final int idx = i;
             hits.add(new Hit(r, () -> { cat = idx; scroll = 0; confirmReset = false; }));
         }

@@ -125,8 +125,13 @@ public class RkbModulesScreen extends Screen {
     private void drawContent(DrawContext ctx, int mx, int my, float delta) {
         TextRenderer tr = textRenderer;
         RkbUi.Rect c = shell.content();
-        ctx.drawText(tr, RkbUi.menuText("RKB Modules"), c.x(), c.y(), RkbUi.TEXT, false);
-        ctx.drawText(tr, RkbUi.menuText("Enable, search, and configure modules."), c.x(), c.y() + 12, RkbUi.MUTED, false);
+        float titleScale = 1.45f;
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().translate(c.x(), c.y());
+        ctx.getMatrices().scale(titleScale, titleScale);
+        ctx.drawText(tr, RkbUi.menuText("RKB Modules"), 0, 0, RkbUi.TEXT, false);
+        ctx.getMatrices().popMatrix();
+        ctx.drawText(tr, RkbUi.menuText("Enable, search, and configure every registered module."), c.x(), c.y() + 13, RkbUi.MUTED, false);
 
         int searchW = Math.min(240, Math.max(140, c.width() / 3));
         search.setX(c.x());
@@ -175,10 +180,10 @@ public class RkbModulesScreen extends Screen {
     }
 
     private void drawGrid(DrawContext ctx, TextRenderer tr, RkbUi.Rect list, int mx, int my) {
-        int cols = list.width() >= 860 ? 3 : list.width() >= 560 ? 2 : 1;
+        int cols = list.width() >= 980 ? 4 : list.width() >= 720 ? 3 : list.width() >= 470 ? 2 : 1;
         int gap = 8;
         int cardW = (list.width() - gap * (cols - 1)) / cols;
-        int cardH = 74;
+        int cardH = 86;
         int y = list.y() - (int) scroll;
         int x0 = list.x();
         int i = 0;
@@ -193,28 +198,28 @@ public class RkbModulesScreen extends Screen {
             if (card.bottom() >= list.y() && card.y() <= list.bottom()) {
                 boolean hover = card.contains(mx, my);
                 ctx.fill(card.x(), card.y(), card.right(), card.bottom(), hover ? RkbUi.SURFACE_3 : RkbUi.SURFACE_2);
-                drawBorder(ctx, card, RkbUi.LINE);
-                if (m.isEnabled()) ctx.fill(card.x(), card.y() + 8, card.x() + 2, card.bottom() - 8, RkbUi.CHROME_ACCENT);
-                ctx.drawText(tr, RkbUi.fit(tr, m.name(), cardW - 72), cx + 12, cy + 10, RkbUi.TEXT, false);
-                ctx.drawText(tr, RkbUi.fit(tr, m.description(), cardW - 24), cx + 12, cy + 24, RkbUi.MUTED, false);
-                ctx.drawText(tr, m.category().label().toUpperCase(Locale.ROOT), cx + 12, cy + 54, RkbUi.DIM, false);
-                // config button
-                RkbUi.Rect cfg = new RkbUi.Rect(cx + cardW - 58, cy + 46, 20, 20);
+                drawBorder(ctx, card, hover ? 0xFF3A4352 : RkbUi.LINE);
+                if (m.isEnabled()) ctx.fill(card.x(), card.y() + 8, card.x() + 2, card.bottom() - 8, RkbUi.SUCCESS);
+                ctx.drawText(tr, RkbUi.fit(tr, m.name(), cardW - 20), cx + 12, cy + 10, RkbUi.TEXT, false);
+                ctx.drawText(tr, RkbUi.fit(tr, m.category().label().toUpperCase(Locale.ROOT), cardW - 20), cx + 12, cy + 24, RkbUi.DIM, false);
+                ctx.drawText(tr, RkbUi.fit(tr, m.description(), cardW - 20), cx + 12, cy + 38, RkbUi.MUTED, false);
+                // settings button
+                RkbUi.Rect cfg = new RkbUi.Rect(cx + 10, cy + cardH - 26, 20, 18);
                 drawBorder(ctx, cfg, cfg.contains(mx, my) ? RkbUi.CHROME_ACCENT : RkbUi.LINE);
                 ctx.drawText(tr, RkbUi.menuText("..."), cfg.x() + 5, cfg.y() + 5, RkbUi.MUTED, false);
                 hits.add(new Hit(cfg, () -> { detail = m; scroll = 0; }));
-                // toggle
-                RkbUi.Rect tog = new RkbUi.Rect(cx + cardW - 32, cy + 10, 24, 12);
-                drawToggle(ctx, tog, m.isEnabled());
+                // reference-style state bar
+                RkbUi.Rect tog = new RkbUi.Rect(cx + cardW - 70, cy + cardH - 26, 60, 18);
+                drawStateToggle(ctx, tr, tog, m.isEnabled());
                 hits.add(new Hit(tog, () -> { m.toggle(); ConfigManager.save(); }));
-                // card click opens detail, but avoid overlapping toggle/config
-                RkbUi.Rect body = new RkbUi.Rect(cx, cy, cardW - 64, cardH);
+                RkbUi.Rect body = new RkbUi.Rect(cx, cy, cardW, cardH - 30);
                 hits.add(new Hit(body, () -> { detail = m; scroll = 0; }));
             }
             i++;
         }
         int rows = (shown.size() + cols - 1) / cols;
         contentH = rows * (cardH + gap) + 24;
+        ctx.fill(list.x(), list.bottom() - 16, list.right(), list.bottom(), RkbUi.BG);
         ctx.drawText(tr, shown.size() + " modules · " + enabledCount + " enabled", list.x(), list.bottom() - 14, RkbUi.DIM, false);
     }
 
@@ -287,6 +292,15 @@ public class RkbModulesScreen extends Screen {
         drawBorder(ctx, r, primary ? RkbUi.CHROME_ACCENT : RkbUi.LINE);
         int tw = tr.getWidth(label);
         ctx.drawText(tr, label, r.x() + (r.width() - tw) / 2, r.y() + (r.height() - 8) / 2, primary ? 0xFFFFFFFF : RkbUi.TEXT, false);
+    }
+
+    private void drawStateToggle(DrawContext ctx, TextRenderer tr, RkbUi.Rect r, boolean on) {
+        ctx.fill(r.x(), r.y(), r.right(), r.bottom(), on ? 0xFF176D3C : 0xFF272E3A);
+        drawBorder(ctx, r, on ? 0xFF1F8A4C : RkbUi.LINE);
+        String label = on ? "Enabled" : "Disabled";
+        int w = tr.getWidth(RkbUi.menuText(label));
+        ctx.drawText(tr, RkbUi.menuText(label), r.x() + (r.width() - w) / 2, r.y() + (r.height() - 8) / 2,
+                on ? 0xFFE0FFE9 : RkbUi.MUTED, false);
     }
 
     private void drawToggle(DrawContext ctx, RkbUi.Rect r, boolean on) {

@@ -378,13 +378,18 @@ public class CosmeticsScreen extends Screen {
 
     private void drawHeader(DrawContext ctx, TextRenderer tr, int accent, int mx, int my) {
         CosmeticsLayout.Rect h = layout.header();
-        ctx.drawText(tr, RkbUi.menuText("Cosmetics"), h.x(), h.y() + 5, RkbUi.TEXT, false);
+        float titleScale = 1.55f;
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().translate(h.x(), h.y() + 1);
+        ctx.getMatrices().scale(titleScale, titleScale);
+        ctx.drawText(tr, RkbUi.menuText("Cosmetics"), 0, 0, RkbUi.TEXT, false);
+        ctx.getMatrices().popMatrix();
         String player = PlayerIdentity.username();
         if (player.isEmpty()) {
             player = "Player";
         }
-        ctx.drawText(tr, "3D skins and capes  ·  " + fit(tr, player, Math.max(60, h.width() / 3)),
-                h.x(), h.y() + 19, RkbUi.MUTED, false);
+        ctx.drawText(tr, RkbUi.menuText("Customize your look!  ·  " + fit(tr, player, Math.max(60, h.width() / 3))),
+                h.x(), h.y() + 20, RkbUi.MUTED, false);
 
         String status = CloudService.statusText();
         int statusW = Math.min(220, Math.max(110, tr.getWidth(status) + 30));
@@ -520,137 +525,193 @@ public class CosmeticsScreen extends Screen {
         int y = r.y() + 6 - Math.round(listScroll);
         ctx.drawText(tr, RkbUi.menuText("SKIN COLLECTION"), r.x() + 4, y, accent, false);
         y += 14;
-        y = wrapped(ctx, tr, "Local skins only. The default row uses the real Steve/Alex texture for this UUID.",
+        y = wrapped(ctx, tr, "Local skins only. The default tile uses the real Steve/Alex texture for this UUID.",
                 r.x() + 4, y, r.width() - 8, Theme.MUTED);
-        y += 7;
-
-        boolean defaultSelected = selectedSkinId.isEmpty() || SkinSetStore.byId(selectedSkinId) == null;
-        y = drawSkinRow(ctx, tr, accent, null, defaultSelected, r, y);
+        y += 8;
 
         List<SkinSetStore.SkinSet> sets = SkinSetStore.state().sets();
-        if (sets.isEmpty()) {
-            ctx.drawText(tr, fit(tr, "No saved skins yet. Upload a PNG or import an image URL below.",
-                    r.width() - 16), r.x() + 8, y + 8, Theme.MUTED, false);
-            y += 30;
-        } else {
-            for (SkinSetStore.SkinSet set : sets) {
-                y = drawSkinRow(ctx, tr, accent, set, set.id().equals(selectedSkinId), r, y);
+        int total = 1 + sets.size();
+        int cols = r.width() >= 520 ? 5 : r.width() >= 400 ? 4 : r.width() >= 300 ? 3 : 2;
+        int gap = 6;
+        int tileW = Math.max(48, (r.width() - 8 - gap * (cols - 1)) / cols);
+        int tileH = 66;
+        int rows = (total + cols - 1) / cols;
+        for (int i = 0; i < total; i++) {
+            int col = i % cols;
+            int row = i / cols;
+            CosmeticsLayout.Rect tile = new CosmeticsLayout.Rect(r.x() + 2 + col * (tileW + gap),
+                    y + row * (tileH + gap), tileW, tileH);
+            if (i == 0) {
+                drawSkinTile(ctx, tr, accent, tile, null);
+            } else {
+                SkinSetStore.SkinSet set = sets.get(i - 1);
+                drawSkinTile(ctx, tr, accent, tile, set);
             }
         }
-        y += 6;
+        y += rows * tileH + Math.max(0, rows - 1) * gap + 4;
 
+        if (sets.isEmpty()) {
+            ctx.drawText(tr, fit(tr, "No saved skins yet. Upload a PNG or import an image URL below.",
+                    r.width() - 16), r.x() + 4, y, Theme.MUTED, false);
+            y += 16;
+        }
+
+        SkinSetStore.SkinSet selectedSet = SkinSetStore.byId(selectedSkinId);
+        if (selectedSet != null) {
+            int right = r.right() - 6;
+            if (renamingId.equals(selectedSet.id())) {
+                renameFieldY = y + 4;
+                actionButton(ctx, tr, "Save", right, y, true, true, () -> {
+                    SkinSetStore.rename(selectedSet.id(), renameField.getText());
+                    renamingId = "";
+                    renameField.setFocused(false);
+                });
+                actionButton(ctx, tr, "Cancel", right - actionButtonWidth(tr, "Save") - 5, y, true, false, () -> {
+                    renamingId = "";
+                    renameField.setFocused(false);
+                });
+                y += 28;
+            } else {
+                actionButton(ctx, tr, "Delete", right, y, true, false, () -> SkinSetStore.delete(selectedSet.id()));
+                actionButton(ctx, tr, "Rename", right - actionButtonWidth(tr, "Delete") - 5, y, true, false, () -> {
+                    renamingId = selectedSet.id();
+                    renameField.setText(selectedSet.name());
+                    renameField.setFocused(true);
+                });
+                y += 26;
+            }
+        }
+        y += 4;
         y = drawAddSkinCard(ctx, tr, accent, r, y);
         listTotal = y - r.y() + 10;
     }
 
-    private int drawSkinRow(DrawContext ctx, TextRenderer tr, int accent, SkinSetStore.SkinSet set, boolean selected,
-                            CosmeticsLayout.Rect r, int y) {
-        int h = set == null ? 38 : 42;
-        CosmeticsLayout.Rect row = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, h);
-        drawPanel(ctx, row, selected ? Theme.CARD_HOVER : Theme.CARD, selected ? accent : Theme.BORDER, accent);
+    private void drawSkinTile(DrawContext ctx, TextRenderer tr, int accent, CosmeticsLayout.Rect tile,
+                              SkinSetStore.SkinSet set) {
+        boolean selected = set == null
+                ? (selectedSkinId.isEmpty() || SkinSetStore.byId(selectedSkinId) == null)
+                : set.id().equals(selectedSkinId);
+        boolean applied = set == null
+                ? SkinSetStore.activeSet() == null
+                : set.id().equals(SkinSetStore.state().activeId());
+        int fill = selected ? Theme.CARD_HOVER : Theme.CARD;
+        drawPanel(ctx, tile, fill, selected ? accent : Theme.BORDER, accent);
         if (selected) {
-            ctx.fill(row.x(), row.y() + 4, row.x() + 3, row.bottom() - 4, accent);
+            ctx.fill(tile.x(), tile.y() + 4, tile.x() + 2, tile.bottom() - 4, accent);
         }
+        // simple model silhouette so the grid reads like the reference tiles
+        int u = Math.max(1, tile.height() / 40);
+        int mx = tile.x() + 10;
+        int my = tile.y() + 8;
+        int bodyW = 10 * u;
+        int bodyH = 13 * u;
+        ctx.fill(mx + 2 * u, my, mx + 8 * u, my + 5 * u, 0xFFC38D70);
+        ctx.fill(mx + 2 * u, my + 5 * u, mx + 8 * u, my + 6 * u, 0xFF171A22);
+        ctx.fill(mx + u, my + 6 * u, mx + 9 * u, my + 6 * u + bodyH, selected ? 0xFF2A3140 : 0xFF20242F);
+        ctx.fill(mx + 2 * u, my + 6 * u, mx + 8 * u, my + 9 * u, set == null ? 0xFF2F7AD8 : 0xFF8A2638);
+        ctx.fill(mx + 2 * u, my + 6 * u + bodyH, mx + 4 * u, my + 6 * u + bodyH + 7 * u, 0xFF171A22);
+        ctx.fill(mx + 6 * u, my + 6 * u + bodyH, mx + 8 * u, my + 6 * u + bodyH + 7 * u, 0xFF171A22);
+
         String name = set == null ? "Minecraft default" : set.name();
-        String sub = set == null ? "Real vanilla texture · " + PlayerIdentity.shortUuid() : SkinRules.label(set.model()) + "  ·  local PNG";
-        ctx.drawText(tr, fit(tr, name, row.width() - 110), row.x() + 10, row.y() + 6, Theme.TEXT, false);
-        ctx.drawText(tr, fit(tr, sub, row.width() - 110), row.x() + 10, row.y() + 19, Theme.MUTED, false);
-
-        int right = row.right() - 7;
-        if (set == null) {
-            ctx.drawText(tr, selected ? "SELECTED" : "Default", right - tr.getWidth(selected ? "SELECTED" : "Default"),
-                    row.y() + 14, selected ? accent : Theme.MUTED, false);
-            hits.add(new Hit(row.x(), row.y(), row.right(), row.bottom(), true, () -> {
-                selectedSkinId = "";
-                listScroll = 0;
-            }));
-            return y + h + 4;
-        }
-
-        if (renamingId.equals(set.id())) {
-            renameFieldY = row.y() + h + 2;
-            actionButton(ctx, tr, "Save", right, row.y() + 12, true, true, () -> {
-                SkinSetStore.rename(set.id(), renameField.getText());
-                renamingId = "";
-                renameField.setFocused(false);
-            });
-            actionButton(ctx, tr, "Cancel", right - actionButtonWidth(tr, "Save") - 5, row.y() + 12, true, false, () -> {
-                renamingId = "";
-                renameField.setFocused(false);
-            });
-        } else if (selected) {
-            actionButton(ctx, tr, "Delete", right, row.y() + 12, true, false, () -> SkinSetStore.delete(set.id()));
-            actionButton(ctx, tr, "Rename", right - actionButtonWidth(tr, "Delete") - 5, row.y() + 12, true, false, () -> {
-                renamingId = set.id();
-                renameField.setText(set.name());
-                renameField.setFocused(true);
-            });
+        String sub = set == null ? "Vanilla Steve/Alex" : SkinRules.label(set.model()) + " · local PNG";
+        int textX = mx + 12 * u;
+        int textW = Math.max(20, tile.right() - textX - 6);
+        ctx.drawText(tr, fit(tr, name, textW), textX, tile.y() + 12, Theme.TEXT, false);
+        ctx.drawText(tr, fit(tr, sub, textW), textX, tile.y() + 24, Theme.MUTED, false);
+        if (applied) {
+            ctx.drawText(tr, "APPLIED", textX, tile.y() + 40, accent, false);
         } else {
-            ctx.drawText(tr, set.id().equals(SkinSetStore.state().activeId()) ? "APPLIED" : "SELECT",
-                    right - tr.getWidth(set.id().equals(SkinSetStore.state().activeId()) ? "APPLIED" : "SELECT"),
-                    row.y() + 14, set.id().equals(SkinSetStore.state().activeId()) ? accent : Theme.MUTED, false);
+            ctx.drawText(tr, selected ? "SELECTED" : "SELECT", textX, tile.y() + 40, selected ? accent : Theme.DIM, false);
         }
-        hits.add(new Hit(row.x(), row.y(), row.right(), row.bottom(), true, () -> {
-            selectedSkinId = set.id();
+        hits.add(new Hit(tile.x(), tile.y(), tile.right(), tile.bottom(), true, () -> {
+            selectedSkinId = set == null ? "" : set.id();
             renamingId = "";
             listScroll = 0;
         }));
-        return y + h + 4;
     }
 
     private int drawAddSkinCard(DrawContext ctx, TextRenderer tr, int accent, CosmeticsLayout.Rect r, int y) {
-        boolean narrow = r.width() < 320;
-        int cardH = input == Input.NONE ? 76 : 96;
-        CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, cardH);
-        drawPanel(ctx, card, Theme.CARD_INNER, Theme.BORDER, accent);
-        ctx.drawText(tr, RkbUi.menuText("ADD A SKIN"), card.x() + 10, card.y() + 8, accent, false);
-        ctx.drawText(tr, fit(tr, "PNG, 64x64 or 64x32 · at most 256 KB · stored locally", card.width() - 20),
-                card.x() + 10, card.y() + 21, Theme.MUTED, false);
-
-        String upload = narrow ? "Upload" : "Upload PNG";
-        String url = narrow ? "URL" : "Import URL";
-        String scan = narrow ? "Inbox" : "Scan inbox";
-        int by = card.y() + 38;
-        int right = card.right() - 9;
-        actionButton(ctx, tr, url, right, by, true, false, () -> {
-            input = input == Input.URL ? Input.NONE : Input.URL;
-            listScroll = 0;
+        ctx.drawText(tr, RkbUi.menuText("ADD A SKIN"), r.x() + 4, y, accent, false);
+        String scan = "Scan inbox";
+        actionButton(ctx, tr, scan, r.right() - 6, y - 4, true, false, () -> {
+            SkinSetStore.scanInbox();
+            showToast("Checking the local inbox folder...");
         });
-        actionButton(ctx, tr, upload, right - actionButtonWidth(tr, url) - 5, by, true, false, () -> {
-            input = input == Input.PATH ? Input.NONE : Input.PATH;
-            listScroll = 0;
-        });
-        actionButton(ctx, tr, scan,
-                right - actionButtonWidth(tr, upload) - actionButtonWidth(tr, url) - 10, by, true, false, () -> {
-                    SkinSetStore.scanInbox();
-                    showToast("Checking the local inbox folder...");
-                });
+        y += 14;
+        ctx.drawText(tr, fit(tr, "PNG, 64x64 or 64x32 · at most 256 KB · stored locally", r.width() - 8),
+                r.x() + 4, y, Theme.MUTED, false);
+        y += 14;
 
-        int fieldY = card.y() + 58;
+        int gap = 8;
+        int half = Math.max(70, (r.width() - 8 - gap) / 2);
+        int cardH = 72;
+        CosmeticsLayout.Rect upload = new CosmeticsLayout.Rect(r.x() + 2, y, half, cardH);
+        CosmeticsLayout.Rect url = new CosmeticsLayout.Rect(upload.right() + gap, y, half, cardH);
+        drawSkinSourceCard(ctx, tr, accent, upload, "Upload PNG", "Select a skin file",
+                input == Input.PATH, () -> {
+                    input = input == Input.PATH ? Input.NONE : Input.PATH;
+                    listScroll = 0;
+                }, false);
+        drawSkinSourceCard(ctx, tr, accent, url, "Import URL", "Paste a skin URL",
+                input == Input.URL, () -> {
+                    input = input == Input.URL ? Input.NONE : Input.URL;
+                    listScroll = 0;
+                }, true);
+        y += cardH + 6;
+
         if (input == Input.PATH) {
-            ctx.drawText(tr, RkbUi.menuText("PNG path"), card.x() + 10, fieldY + 4, accent, false);
-            pathFieldY = fieldY - 4;
-            actionButton(ctx, tr, "Import", card.right() - 9, fieldY - 2, true, true, () -> {
+            ctx.drawText(tr, RkbUi.menuText("PNG path"), r.x() + 4, y + 6, accent, false);
+            pathFieldY = y;
+            actionButton(ctx, tr, "Import", r.right() - 6, y + 2, true, true, () -> {
                 String value = pathField.getText();
                 pathField.setText("");
                 SkinSetStore.importPath(value);
                 showToast("Importing local skin...");
             });
+            y += 24;
         } else if (input == Input.URL) {
-            ctx.drawText(tr, RkbUi.menuText("PNG URL"), card.x() + 10, fieldY + 4, accent, false);
-            urlFieldY = fieldY - 4;
-            actionButton(ctx, tr, "Import", card.right() - 9, fieldY - 2, true, true, () -> {
+            ctx.drawText(tr, RkbUi.menuText("PNG URL"), r.x() + 4, y + 6, accent, false);
+            urlFieldY = y;
+            actionButton(ctx, tr, "Import", r.right() - 6, y + 2, true, true, () -> {
                 String value = urlField.getText();
                 urlField.setText("");
                 SkinSetStore.importUrl(value);
                 showToast("Fetching skin over HTTPS...");
             });
+            y += 24;
         }
         if (input != Input.NONE) {
-            ctx.drawText(tr, fit(tr, "Local only · nothing is uploaded to Supabase", card.width() - 20),
-                    card.x() + 10, card.bottom() - 12, Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, "Local only · nothing is uploaded to Supabase", r.width() - 8),
+                    r.x() + 4, y + 2, Theme.MUTED, false);
+            y += 14;
         }
-        return card.bottom() + 8;
+        return y + 6;
+    }
+
+    private void drawSkinSourceCard(DrawContext ctx, TextRenderer tr, int accent, CosmeticsLayout.Rect card,
+                                    String title, String subtitle, boolean active, Runnable action, boolean link) {
+        drawPanel(ctx, card, active ? Theme.CARD_HOVER : Theme.CARD_INNER,
+                active ? accent : Theme.BORDER, accent);
+        int cx = card.x() + card.width() / 2;
+        int iconY = card.y() + 18;
+        int c = active ? accent : Theme.MUTED;
+        if (link) {
+            int u = 2;
+            ctx.fill(cx - 6 * u, iconY + 2 * u, cx + 2 * u, iconY + 3 * u, c);
+            ctx.fill(cx + 2 * u, iconY, cx + 3 * u, iconY + 8 * u, c);
+            ctx.fill(cx - 3 * u, iconY + 5 * u, cx + 3 * u, iconY + 6 * u, c);
+        } else {
+            int u = 2;
+            ctx.fill(cx - 2 * u, iconY, cx + 2 * u, iconY + 5 * u, c);
+            ctx.fill(cx - 1 * u, iconY + 5 * u, cx + 1 * u, iconY + 8 * u, c);
+            ctx.fill(cx - 4 * u, iconY + 3 * u, cx - 2 * u, iconY + 4 * u, c);
+            ctx.fill(cx + 2 * u, iconY + 3 * u, cx + 4 * u, iconY + 4 * u, c);
+        }
+        String titleFit = RkbUi.fit(tr, title, card.width() - 12);
+        String subFit = RkbUi.fit(tr, subtitle, card.width() - 12);
+        ctx.drawText(tr, RkbUi.menuText(titleFit), card.x() + (card.width() - tr.getWidth(RkbUi.menuText(titleFit))) / 2, card.y() + 34, active ? accent : Theme.TEXT, false);
+        ctx.drawText(tr, RkbUi.menuText(subFit), card.x() + (card.width() - tr.getWidth(RkbUi.menuText(subFit))) / 2, card.y() + 48, Theme.MUTED, false);
+        hits.add(new Hit(card.x(), card.y(), card.right(), card.bottom(), true, action));
     }
 
     private void drawCapeList(DrawContext ctx, TextRenderer tr, int accent) {
