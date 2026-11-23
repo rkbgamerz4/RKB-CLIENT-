@@ -64,7 +64,7 @@ public class CosmeticsScreen extends Screen {
     public static final int TAB_CAPE = 1;
     public static final int TAB_REDEEM = 2;
 
-    private enum Input { NONE, PATH, URL }
+    private enum Input { NONE, URL }
 
     private record Hit(int x1, int y1, int x2, int y2, boolean inList, Runnable action) {
         boolean contains(int x, int y) {
@@ -79,11 +79,9 @@ public class CosmeticsScreen extends Screen {
     private float listScroll;
     private int listTotal;
 
-    private TextFieldWidget pathField;
     private TextFieldWidget urlField;
     private TextFieldWidget renameField;
     private TextFieldWidget redeemField;
-    private int pathFieldY;
     private int urlFieldY;
     private int renameFieldY;
     private int redeemFieldY;
@@ -117,18 +115,11 @@ public class CosmeticsScreen extends Screen {
         MinecraftClient mc = MinecraftClient.getInstance();
         TextRenderer tr = mc.textRenderer;
 
-        String oldPath = pathField == null ? "" : pathField.getText();
         String oldUrl = urlField == null ? "" : urlField.getText();
         String oldRename = renameField == null ? "" : renameField.getText();
         String oldCode = redeemField == null ? "" : redeemField.getText();
         int fieldW = Math.max(80, layout.list().width() - 20);
 
-        pathField = new TextFieldWidget(tr, layout.list().x() + 8, layout.list().y(), fieldW, 18,
-                Text.literal("Skin PNG path"));
-        pathField.setMaxLength(220);
-        pathField.setPlaceholder(Text.literal("Paste a PNG path, then press Import"));
-        pathField.setText(oldPath);
-        addSelectableChild(pathField);
 
         urlField = new TextFieldWidget(tr, layout.list().x() + 8, layout.list().y(), fieldW, 18,
                 Text.literal("Skin image URL"));
@@ -223,15 +214,12 @@ public class CosmeticsScreen extends Screen {
             return;
         }
         setTab(TAB_SKIN);
-        input = Input.PATH;
+        input = Input.NONE;
         SkinSetStore.importFiles(pngs);
         showToast("Importing " + pngs.size() + " skin" + (pngs.size() == 1 ? "" : "s") + "...");
     }
 
     private TextFieldWidget activeField() {
-        if (tab == TAB_SKIN && input == Input.PATH && pathField != null && pathField.isFocused()) {
-            return pathField;
-        }
         if (tab == TAB_SKIN && input == Input.URL && urlField != null && urlField.isFocused()) {
             return urlField;
         }
@@ -245,9 +233,6 @@ public class CosmeticsScreen extends Screen {
     }
 
     private void blurFields() {
-        if (pathField != null) {
-            pathField.setFocused(false);
-        }
         if (urlField != null) {
             urlField.setFocused(false);
         }
@@ -315,10 +300,6 @@ public class CosmeticsScreen extends Screen {
     }
 
     private TextFieldWidget fieldAt(int mx, int my) {
-        if (tab == TAB_SKIN && input == Input.PATH && pathField != null && pathField.visible
-                && pathField.isMouseOver(mx, my)) {
-            return pathField;
-        }
         if (tab == TAB_SKIN && input == Input.URL && urlField != null && urlField.visible
                 && urlField.isMouseOver(mx, my)) {
             return urlField;
@@ -647,11 +628,15 @@ public class CosmeticsScreen extends Screen {
         int cardH = 72;
         CosmeticsLayout.Rect upload = new CosmeticsLayout.Rect(r.x() + 2, y, half, cardH);
         CosmeticsLayout.Rect url = new CosmeticsLayout.Rect(upload.right() + gap, y, half, cardH);
-        drawSkinSourceCard(ctx, tr, accent, upload, "Upload PNG", "Select a skin file",
-                input == Input.PATH, () -> {
-                    input = input == Input.PATH ? Input.NONE : Input.PATH;
-                    listScroll = 0;
-                }, false);
+        drawSkinSourceCard(ctx, tr, accent, upload, "Upload PNG", "Pick from files", false, () -> {
+            input = Input.NONE;
+            listScroll = 0;
+            Path start = Path.of(System.getProperty("user.home", "."));
+            Path downloads = start.resolve("Downloads");
+            if (java.nio.file.Files.isDirectory(downloads)) start = downloads;
+            MinecraftClient.getInstance().setScreen(new RkbFilePickerScreen(this, "Select Skin PNG", ".png", start,
+                    file -> SkinSetStore.importFiles(java.util.List.of(file))));
+        }, false);
         drawSkinSourceCard(ctx, tr, accent, url, "Import URL", "Paste a skin URL",
                 input == Input.URL, () -> {
                     input = input == Input.URL ? Input.NONE : Input.URL;
@@ -659,17 +644,7 @@ public class CosmeticsScreen extends Screen {
                 }, true);
         y += cardH + 6;
 
-        if (input == Input.PATH) {
-            ctx.drawText(tr, RkbUi.menuText("PNG path"), r.x() + 4, y + 6, accent, false);
-            pathFieldY = y;
-            actionButton(ctx, tr, "Import", r.right() - 6, y + 2, true, true, () -> {
-                String value = pathField.getText();
-                pathField.setText("");
-                SkinSetStore.importPath(value);
-                showToast("Importing local skin...");
-            });
-            y += 24;
-        } else if (input == Input.URL) {
+        if (input == Input.URL) {
             ctx.drawText(tr, RkbUi.menuText("PNG URL"), r.x() + 4, y + 6, accent, false);
             urlFieldY = y;
             actionButton(ctx, tr, "Import", r.right() - 6, y + 2, true, true, () -> {
@@ -679,8 +654,6 @@ public class CosmeticsScreen extends Screen {
                 showToast("Fetching skin over HTTPS...");
             });
             y += 24;
-        }
-        if (input != Input.NONE) {
             ctx.drawText(tr, fit(tr, "Local only · nothing is uploaded to Supabase", r.width() - 8),
                     r.x() + 4, y + 2, Theme.MUTED, false);
             y += 14;
@@ -1037,9 +1010,6 @@ public class CosmeticsScreen extends Screen {
     // ------------------------------------------------------------------ shared drawing helpers
 
     private void drawFields(DrawContext ctx, int mx, int my, float delta) {
-        if (pathField != null && pathField.visible) {
-            pathField.render(ctx, mx, my, delta);
-        }
         if (urlField != null && urlField.visible) {
             urlField.render(ctx, mx, my, delta);
         }
@@ -1055,8 +1025,6 @@ public class CosmeticsScreen extends Screen {
         CosmeticsLayout.Rect r = layout.list();
         int fieldW = Math.max(80, r.width() - 20);
         boolean narrow = r.width() < 240;
-        positionField(pathField, tab == TAB_SKIN && input == Input.PATH, narrow ? r.x() + 10 : r.x() + 72,
-                pathFieldY, narrow ? Math.max(50, r.width() - 70) : Math.max(60, fieldW - 168), r);
         positionField(urlField, tab == TAB_SKIN && input == Input.URL, narrow ? r.x() + 10 : r.x() + 66,
                 urlFieldY, narrow ? Math.max(50, r.width() - 70) : Math.max(60, fieldW - 162), r);
         positionField(renameField, tab == TAB_SKIN && !renamingId.isEmpty(), r.x() + 10, renameFieldY,
