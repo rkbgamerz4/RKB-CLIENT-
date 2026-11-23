@@ -125,36 +125,66 @@ public class RkbModulesScreen extends Screen {
     private void drawContent(DrawContext ctx, int mx, int my, float delta) {
         TextRenderer tr = textRenderer;
         RkbUi.Rect c = shell.content();
-        float titleScale = 1.45f;
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().translate(c.x(), c.y());
-        ctx.getMatrices().scale(titleScale, titleScale);
-        ctx.drawText(tr, RkbUi.menuText("RKB Modules"), 0, 0, RkbUi.TEXT, false);
-        ctx.getMatrices().popMatrix();
-        ctx.drawText(tr, RkbUi.menuText("Enable, search, and configure every registered module."), c.x(), c.y() + 13, RkbUi.MUTED, false);
 
-        int searchW = Math.min(240, Math.max(140, c.width() / 3));
-        search.setX(c.x());
-        search.setY(c.y() + 28);
-        search.setWidth(searchW);
-        search.visible = true;
+        // Reference-style mod menu panel inside the RKB content shell.
+        int pad = 12;
+        RkbUi.Rect panel = new RkbUi.Rect(c.x(), c.y(), c.width(), c.height() - 2);
+        ctx.fill(panel.x(), panel.y(), panel.right(), panel.bottom(), 0xF5080B12);
+        drawBorder(ctx, panel, 0x22FFFFFF);
 
-        // chips
-        int chipX = c.x() + searchW + 10;
-        int chipY = c.y() + 28;
-        chipX = drawChip(ctx, tr, "All", chipX, chipY, filter == null && !favoritesOnly, () -> { filter = null; favoritesOnly = false; scroll = 0; }, mx, my);
+        // Header: red logo badge + spacer + close
+        int hx = panel.x() + pad;
+        int hy = panel.y() + pad;
+        RkbUi.Rect logo = new RkbUi.Rect(hx, hy, 142, 34);
+        ctx.fill(logo.x(), logo.y(), logo.right(), logo.bottom(), 0xFFE33342);
+        drawBorder(ctx, logo, 0xFFB32632);
+        ctx.drawText(tr, RkbUi.menuText("\u25A6 RKB MOD MENU"), logo.x() + 10, logo.y() + 13, 0xFFFFFFFF, false);
+        hits.add(new Hit(logo, () -> { detail = null; scroll = 0; filter = null; favoritesOnly = false; }));
+
+        RkbUi.Rect close = new RkbUi.Rect(panel.right() - pad - 32, hy + 2, 32, 30);
+        boolean closeHover = close.contains(mx, my);
+        ctx.fill(close.x(), close.y(), close.right(), close.bottom(), closeHover ? 0xFF3A1820 : 0xFF24131A);
+        drawBorder(ctx, close, 0xFF6C2734);
+        ctx.drawText(tr, "x", close.x() + 12, close.y() + 10, 0xFFE15A67, false);
+        hits.add(new Hit(close, this::close));
+
+        // Filters row
+        int fy = hy + 44;
+        int chipH = 28;
+        int chipGap = 6;
+        int cxChip = hx;
+        cxChip = drawFilterChip(ctx, tr, "All", cxChip, fy, chipH, filter == null && !favoritesOnly,
+                () -> { filter = null; favoritesOnly = false; scroll = 0; }, mx, my) + chipGap;
         for (Category cat : Category.values()) {
             if (cat.isPage()) continue;
-            chipX = drawChip(ctx, tr, cat.label(), chipX, chipY, filter == cat && !favoritesOnly, () -> { filter = cat; favoritesOnly = false; scroll = 0; }, mx, my);
-            if (chipX > c.right() - 70) { chipX = c.x() + searchW + 10; chipY += 26; }
+            String label = cat.label();
+            int cw = tr.getWidth(label) + 28;
+            if (cxChip + cw > panel.right() - pad - 220) break; // keep row compact; rest accessible via All/search
+            cxChip = drawFilterChip(ctx, tr, label, cxChip, fy, chipH, filter == cat && !favoritesOnly,
+                    () -> { filter = cat; favoritesOnly = false; scroll = 0; }, mx, my) + chipGap;
         }
-        drawChip(ctx, tr, "Favorites", chipX, chipY, favoritesOnly, () -> { favoritesOnly = !favoritesOnly; filter = null; scroll = 0; }, mx, my);
 
-        int listY = chipY + 32;
-        RkbUi.Rect list = new RkbUi.Rect(c.x(), listY, c.width(), Math.max(60, c.bottom() - listY - 8));
-        ctx.fill(list.x(), list.y(), list.right(), list.bottom(), RkbUi.BG);
+        // Right controls: search, favorites heart, view indicator
+        int rightCtl = panel.right() - pad;
+        RkbUi.Rect viewBtn = new RkbUi.Rect(rightCtl - 28, fy, 28, 28);
+        drawIconButton(ctx, tr, viewBtn, "\u25A6", false, mx, my);
+        rightCtl = viewBtn.x() - 6;
+        RkbUi.Rect favBtn = new RkbUi.Rect(rightCtl - 28, fy, 28, 28);
+        drawIconButton(ctx, tr, favBtn, "\u2665", favoritesOnly, mx, my);
+        hits.add(new Hit(favBtn, () -> { favoritesOnly = !favoritesOnly; filter = null; scroll = 0; }));
+        rightCtl = favBtn.x() - 8;
+        int searchW = Math.max(120, Math.min(230, rightCtl - cxChip - 8));
+        search.setX(rightCtl - searchW);
+        search.setY(fy + 4);
+        search.setWidth(searchW);
+        search.setHeight(20);
+        search.visible = true;
+
+        // Grid/list
+        int listY = fy + 38;
+        RkbUi.Rect list = new RkbUi.Rect(panel.x() + pad, listY, panel.width() - pad * 2,
+                Math.max(60, panel.bottom() - pad - listY));
         ctx.enableScissor(list.x(), list.y(), list.right(), list.bottom());
-
         rebuildShown();
         if (detail != null) {
             drawDetail(ctx, tr, list, mx, my);
@@ -180,10 +210,10 @@ public class RkbModulesScreen extends Screen {
     }
 
     private void drawGrid(DrawContext ctx, TextRenderer tr, RkbUi.Rect list, int mx, int my) {
-        int cols = list.width() >= 980 ? 4 : list.width() >= 720 ? 3 : list.width() >= 470 ? 2 : 1;
+        int cols = list.width() >= 900 ? 4 : list.width() >= 650 ? 3 : list.width() >= 430 ? 2 : 1;
         int gap = 8;
         int cardW = (list.width() - gap * (cols - 1)) / cols;
-        int cardH = 86;
+        int cardH = 112;
         int y = list.y() - (int) scroll;
         int x0 = list.x();
         int i = 0;
@@ -197,30 +227,55 @@ public class RkbModulesScreen extends Screen {
             RkbUi.Rect card = new RkbUi.Rect(cx, cy, cardW, cardH);
             if (card.bottom() >= list.y() && card.y() <= list.bottom()) {
                 boolean hover = card.contains(mx, my);
-                ctx.fill(card.x(), card.y(), card.right(), card.bottom(), hover ? RkbUi.SURFACE_3 : RkbUi.SURFACE_2);
-                drawBorder(ctx, card, hover ? 0xFF3A4352 : RkbUi.LINE);
-                if (m.isEnabled()) ctx.fill(card.x(), card.y() + 8, card.x() + 2, card.bottom() - 8, RkbUi.SUCCESS);
-                ctx.drawText(tr, RkbUi.fit(tr, m.name(), cardW - 20), cx + 12, cy + 10, RkbUi.TEXT, false);
-                ctx.drawText(tr, RkbUi.fit(tr, m.category().label().toUpperCase(Locale.ROOT), cardW - 20), cx + 12, cy + 24, RkbUi.DIM, false);
-                ctx.drawText(tr, RkbUi.fit(tr, m.description(), cardW - 20), cx + 12, cy + 38, RkbUi.MUTED, false);
-                // settings button
-                RkbUi.Rect cfg = new RkbUi.Rect(cx + 10, cy + cardH - 26, 20, 18);
-                drawBorder(ctx, cfg, cfg.contains(mx, my) ? RkbUi.CHROME_ACCENT : RkbUi.LINE);
-                ctx.drawText(tr, RkbUi.menuText("..."), cfg.x() + 5, cfg.y() + 5, RkbUi.MUTED, false);
+                ctx.fill(card.x(), card.y(), card.right(), card.bottom(), hover ? 0xFF151E2C : 0xFF111722);
+                drawBorder(ctx, card, hover ? 0xFF52647D : 0xFF242D3B);
+
+                // body click opens detail; specific controls added after to win hit-testing
+                hits.add(new Hit(card, () -> { detail = m; scroll = 0; }));
+
+                // top row: name + favorite heart
+                String name = RkbUi.fit(tr, m.name(), cardW - 34);
+                ctx.drawText(tr, RkbUi.menuText(name), cx + 10, cy + 10, 0xFFE0E5EE, false);
+                boolean fav = Favorites.contains(m.id());
+                RkbUi.Rect heart = new RkbUi.Rect(cx + cardW - 22, cy + 8, 14, 14);
+                ctx.drawText(tr, fav ? "\u2665" : "\u2661", heart.x(), heart.y() + 2, fav ? 0xFFDF3544 : 0xFF647187, false);
+                hits.add(new Hit(new RkbUi.Rect(heart.x() - 4, heart.y() - 4, 22, 22), () -> { Favorites.toggle(m.id()); ConfigManager.save(); }));
+
+                // center symbol
+                String sym = moduleSymbol(m);
+                float ss = 2.0f;
+                int symW = Math.round(tr.getWidth(sym) * ss);
+                ctx.getMatrices().pushMatrix();
+                ctx.getMatrices().translate(cx + (cardW - symW) / 2f, cy + 34);
+                ctx.getMatrices().scale(ss, ss);
+                ctx.drawText(tr, sym, 0, 0, 0xFFD6DEEB, false);
+                ctx.getMatrices().popMatrix();
+
+                // bottom row: gear + enabled/disabled
+                RkbUi.Rect cfg = new RkbUi.Rect(cx + 10, cy + cardH - 30, 24, 22);
+                boolean cfgHover = cfg.contains(mx, my);
+                ctx.fill(cfg.x(), cfg.y(), cfg.right(), cfg.bottom(), cfgHover ? 0xFF2B374A : 0xFF202A39);
+                drawBorder(ctx, cfg, cfgHover ? 0xFF52647D : 0xFF202A39);
+                ctx.drawText(tr, "\u2699", cfg.x() + 8, cfg.y() + 7, 0xFFC4CFDF, false);
                 hits.add(new Hit(cfg, () -> { detail = m; scroll = 0; }));
-                // reference-style state bar
-                RkbUi.Rect tog = new RkbUi.Rect(cx + cardW - 70, cy + cardH - 26, 60, 18);
+
+                RkbUi.Rect tog = new RkbUi.Rect(cx + 40, cy + cardH - 30, cardW - 50, 22);
                 drawStateToggle(ctx, tr, tog, m.isEnabled());
                 hits.add(new Hit(tog, () -> { m.toggle(); ConfigManager.save(); }));
-                RkbUi.Rect body = new RkbUi.Rect(cx, cy, cardW, cardH - 30);
-                hits.add(new Hit(body, () -> { detail = m; scroll = 0; }));
             }
             i++;
         }
         int rows = (shown.size() + cols - 1) / cols;
         contentH = rows * (cardH + gap) + 24;
-        ctx.fill(list.x(), list.bottom() - 16, list.right(), list.bottom(), RkbUi.BG);
-        ctx.drawText(tr, shown.size() + " modules · " + enabledCount + " enabled", list.x(), list.bottom() - 14, RkbUi.DIM, false);
+        ctx.fill(list.x(), list.bottom() - 16, list.right(), list.bottom(), 0xF5080B12);
+        ctx.drawText(tr, shown.size() + " modules \u00B7 " + enabledCount + " enabled", list.x(), list.bottom() - 14, 0xFF9CA8BA, false);
+    }
+
+    private String moduleSymbol(Module m) {
+        String n = m.name();
+        if (n == null || n.isEmpty()) return "?";
+        // short, stable symbol; avoids emoji/font dependency issues in MC
+        return n.length() <= 3 ? n.toUpperCase(Locale.ROOT) : n.substring(0, 1).toUpperCase(Locale.ROOT);
     }
 
     private void drawDetail(DrawContext ctx, TextRenderer tr, RkbUi.Rect list, int mx, int my) {
@@ -274,16 +329,24 @@ public class RkbModulesScreen extends Screen {
         return y + 44;
     }
 
-    private int drawChip(DrawContext ctx, TextRenderer tr, String label, int x, int y, boolean active, Runnable action, int mx, int my) {
-        int w = tr.getWidth(label) + 18;
-        RkbUi.Rect r = new RkbUi.Rect(x, y, w, 22);
+    private int drawFilterChip(DrawContext ctx, TextRenderer tr, String label, int x, int y, int h, boolean active, Runnable action, int mx, int my) {
+        int w = tr.getWidth(label) + 28;
+        RkbUi.Rect r = new RkbUi.Rect(x, y, w, h);
         boolean hover = r.contains(mx, my);
-        int fill = active ? RkbUi.CHROME_ACCENT : (hover ? RkbUi.SURFACE_3 : 0);
-        if (fill != 0) ctx.fill(r.x(), r.y(), r.right(), r.bottom(), fill);
-        drawBorder(ctx, r, active ? RkbUi.CHROME_ACCENT : RkbUi.LINE);
-        ctx.drawText(tr, label, r.x() + 9, r.y() + 7, active ? 0xFFFFFFFF : RkbUi.MUTED, false);
+        int fill = active ? 0xFFDF3544 : (hover ? 0xFF263245 : 0xFF171D28);
+        ctx.fill(r.x(), r.y(), r.right(), r.bottom(), fill);
+        drawBorder(ctx, r, active ? 0xFFDF3544 : 0x14FFFFFF);
+        ctx.drawText(tr, RkbUi.menuText(label), r.x() + 14, r.y() + (h - 8) / 2, active ? 0xFFFFFFFF : 0xFF9BA6B8, false);
         hits.add(new Hit(r, action));
-        return x + w + 6;
+        return x + w;
+    }
+
+    private void drawIconButton(DrawContext ctx, TextRenderer tr, RkbUi.Rect r, String icon, boolean active, int mx, int my) {
+        boolean hover = r.contains(mx, my);
+        ctx.fill(r.x(), r.y(), r.right(), r.bottom(), active ? 0xFFDF3544 : (hover ? 0xFF263245 : 0xFF171D28));
+        drawBorder(ctx, r, active ? 0xFFDF3544 : 0x14FFFFFF);
+        int tw = tr.getWidth(icon);
+        ctx.drawText(tr, icon, r.x() + (r.width() - tw) / 2, r.y() + (r.height() - 8) / 2, active ? 0xFFFFFFFF : 0xFFD8DFEB, false);
     }
 
     private void drawButton(DrawContext ctx, TextRenderer tr, RkbUi.Rect r, String label, boolean hover, boolean primary) {
@@ -296,11 +359,11 @@ public class RkbModulesScreen extends Screen {
 
     private void drawStateToggle(DrawContext ctx, TextRenderer tr, RkbUi.Rect r, boolean on) {
         ctx.fill(r.x(), r.y(), r.right(), r.bottom(), on ? 0xFF176D3C : 0xFF272E3A);
-        drawBorder(ctx, r, on ? 0xFF1F8A4C : RkbUi.LINE);
+        drawBorder(ctx, r, on ? 0xFF1F8A4C : 0xFF343D4D);
         String label = on ? "Enabled" : "Disabled";
         int w = tr.getWidth(RkbUi.menuText(label));
         ctx.drawText(tr, RkbUi.menuText(label), r.x() + (r.width() - w) / 2, r.y() + (r.height() - 8) / 2,
-                on ? 0xFFE0FFE9 : RkbUi.MUTED, false);
+                on ? 0xFFE0FFE9 : 0xFFAEB7C5, false);
     }
 
     private void drawToggle(DrawContext ctx, RkbUi.Rect r, boolean on) {
