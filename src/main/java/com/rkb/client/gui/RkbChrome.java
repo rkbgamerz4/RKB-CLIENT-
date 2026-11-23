@@ -19,7 +19,7 @@ public final class RkbChrome {
     public static void draw(DrawContext ctx, TextRenderer tr, RkbLayout.TopBar chrome, int mx, int my, int active,
                             HitSink sink) {
         RkbLogo.ensure();
-        int accent = Theme.accent();
+        int accent = Theme.chromeAccent();
         RkbUi.Rect brand = chrome.brand();
         int logo = 22;
         if (RkbLogo.ready()) {

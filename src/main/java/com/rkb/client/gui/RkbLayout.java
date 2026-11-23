@@ -115,4 +115,39 @@ public final class RkbLayout {
     public static int safeBottom(int screenHeight) {
         return screenHeight - 18;
     }
+
+    public record SidebarShell(RkbUi.Rect sidebar, RkbUi.Rect brand, RkbUi.Rect nav, List<RkbUi.Rect> navItems,
+                               RkbUi.Rect account, RkbUi.Rect content, RkbUi.Rect footer, int sidebarWidth,
+                               boolean compact) {
+    }
+
+    /** Responsive left-sidebar shell for interior RKB screens. */
+    public static SidebarShell sidebarShell(int screenWidth, int screenHeight, int navCount) {
+        int w = Math.max(320, screenWidth);
+        int h = Math.max(240, screenHeight);
+        boolean compact = w < 960 || h < 420;
+        int sidebarW = compact ? Math.max(54, Math.min(170, w * 22 / 100)) : 216;
+        if (w < 720) {
+            sidebarW = Math.max(48, Math.min(150, w * 28 / 100));
+        }
+        RkbUi.Rect sidebar = new RkbUi.Rect(0, 0, sidebarW, h);
+        RkbUi.Rect brand = new RkbUi.Rect(14, 14, sidebarW - 28, 34);
+        int navY = 72;
+        int itemH = 28;
+        int gap = 4;
+        List<RkbUi.Rect> items = new ArrayList<>(navCount);
+        for (int i = 0; i < navCount; i++) {
+            items.add(new RkbUi.Rect(10, navY + i * (itemH + gap), sidebarW - 20, itemH));
+        }
+        int navBottom = navCount == 0 ? navY : items.get(items.size() - 1).bottom();
+        RkbUi.Rect nav = new RkbUi.Rect(10, navY, sidebarW - 20, Math.max(0, navBottom - navY));
+        int footerH = 28;
+        RkbUi.Rect footer = new RkbUi.Rect(sidebarW, h - footerH, w - sidebarW, footerH);
+        int accountH = 58;
+        RkbUi.Rect account = new RkbUi.Rect(12, h - footerH - accountH - 12, sidebarW - 24, accountH);
+        int contentX = sidebarW + 16;
+        int contentW = Math.max(120, w - contentX - 16);
+        RkbUi.Rect content = new RkbUi.Rect(contentX, 16, contentW, Math.max(80, h - 16 - footerH));
+        return new SidebarShell(sidebar, brand, nav, List.copyOf(items), account, content, footer, sidebarW, compact);
+    }
 }

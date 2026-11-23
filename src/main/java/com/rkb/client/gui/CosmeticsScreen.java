@@ -102,7 +102,7 @@ public class CosmeticsScreen extends Screen {
 
     private PreviewPlayer previewPlayer;
     private ClientWorld previewWorld;
-    private RkbLayout.TopBar chrome;
+    private RkbLayout.SidebarShell sidebarShell;
     private PlayerEntityModel classicModel;
     private PlayerEntityModel slimModel;
 
@@ -116,8 +116,6 @@ public class CosmeticsScreen extends Screen {
     protected void init() {
         MinecraftClient mc = MinecraftClient.getInstance();
         TextRenderer tr = mc.textRenderer;
-        chrome = RkbLayout.topBar(width, height);
-        layout = CosmeticsLayout.of(width, height, chrome.contentTop() + 2);
 
         String oldPath = pathField == null ? "" : pathField.getText();
         String oldUrl = urlField == null ? "" : urlField.getText();
@@ -344,10 +342,12 @@ public class CosmeticsScreen extends Screen {
         handleMouse(mc, mx, my);
         hits.clear();
         TextRenderer tr = mc.textRenderer;
-        int accent = Theme.accent();
+        int accent = Theme.chromeAccent();
 
         RkbUi.background(ctx, width, height, System.currentTimeMillis());
-        drawPanel(ctx, layout.panel(), 0xE60E1422, RkbUi.LINE, accent);
+        sidebarShell = RkbSidebar.draw(ctx, tr, width, height, mx, my, RkbSidebar.NavAction.COSMETICS,
+                (r, action) -> hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), false, action)));
+        layout = CosmeticsLayout.of(sidebarShell.content());
         drawHeader(ctx, tr, accent, mx, my);
         drawTabs(ctx, tr, accent, mx, my);
 
@@ -374,13 +374,11 @@ public class CosmeticsScreen extends Screen {
         if (System.currentTimeMillis() < toastUntil) {
             drawToast(ctx, tr, accent);
         }
-        RkbChrome.draw(ctx, tr, chrome, mx, my, 5,
-                (r, action) -> hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), false, action)));
     }
 
     private void drawHeader(DrawContext ctx, TextRenderer tr, int accent, int mx, int my) {
         CosmeticsLayout.Rect h = layout.header();
-        ctx.drawText(tr, "Cosmetics", h.x(), h.y() + 5, RkbUi.TEXT, false);
+        ctx.drawText(tr, RkbUi.menuText("Cosmetics"), h.x(), h.y() + 5, RkbUi.TEXT, false);
         String player = PlayerIdentity.username();
         if (player.isEmpty()) {
             player = "Player";
@@ -520,7 +518,7 @@ public class CosmeticsScreen extends Screen {
     private void drawSkinList(DrawContext ctx, TextRenderer tr, int accent) {
         CosmeticsLayout.Rect r = layout.list();
         int y = r.y() + 6 - Math.round(listScroll);
-        ctx.drawText(tr, "SKIN COLLECTION", r.x() + 4, y, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("SKIN COLLECTION"), r.x() + 4, y, accent, false);
         y += 14;
         y = wrapped(ctx, tr, "Local skins only. The default row uses the real Steve/Alex texture for this UUID.",
                 r.x() + 4, y, r.width() - 8, Theme.MUTED);
@@ -605,7 +603,7 @@ public class CosmeticsScreen extends Screen {
         int cardH = input == Input.NONE ? 76 : 96;
         CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, cardH);
         drawPanel(ctx, card, Theme.CARD_INNER, Theme.BORDER, accent);
-        ctx.drawText(tr, "ADD A SKIN", card.x() + 10, card.y() + 8, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("ADD A SKIN"), card.x() + 10, card.y() + 8, accent, false);
         ctx.drawText(tr, fit(tr, "PNG, 64x64 or 64x32 · at most 256 KB · stored locally", card.width() - 20),
                 card.x() + 10, card.y() + 21, Theme.MUTED, false);
 
@@ -630,7 +628,7 @@ public class CosmeticsScreen extends Screen {
 
         int fieldY = card.y() + 58;
         if (input == Input.PATH) {
-            ctx.drawText(tr, "PNG path", card.x() + 10, fieldY + 4, accent, false);
+            ctx.drawText(tr, RkbUi.menuText("PNG path"), card.x() + 10, fieldY + 4, accent, false);
             pathFieldY = fieldY - 4;
             actionButton(ctx, tr, "Import", card.right() - 9, fieldY - 2, true, true, () -> {
                 String value = pathField.getText();
@@ -639,7 +637,7 @@ public class CosmeticsScreen extends Screen {
                 showToast("Importing local skin...");
             });
         } else if (input == Input.URL) {
-            ctx.drawText(tr, "PNG URL", card.x() + 10, fieldY + 4, accent, false);
+            ctx.drawText(tr, RkbUi.menuText("PNG URL"), card.x() + 10, fieldY + 4, accent, false);
             urlFieldY = fieldY - 4;
             actionButton(ctx, tr, "Import", card.right() - 9, fieldY - 2, true, true, () -> {
                 String value = urlField.getText();
@@ -658,7 +656,7 @@ public class CosmeticsScreen extends Screen {
     private void drawCapeList(DrawContext ctx, TextRenderer tr, int accent) {
         CosmeticsLayout.Rect r = layout.list();
         int y = r.y() + 6 - Math.round(listScroll);
-        ctx.drawText(tr, "CAPE COLLECTION", r.x() + 4, y, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("CAPE COLLECTION"), r.x() + 4, y, accent, false);
         y += 14;
         y = wrapped(ctx, tr, "Ownership and assets come from V2. Missing or inactive capes stay unavailable.",
                 r.x() + 4, y, r.width() - 8, Theme.MUTED);
@@ -747,13 +745,13 @@ public class CosmeticsScreen extends Screen {
     private void drawRedeemList(DrawContext ctx, TextRenderer tr, int accent) {
         CosmeticsLayout.Rect r = layout.list();
         int y = r.y() + 6 - Math.round(listScroll);
-        ctx.drawText(tr, "REDEEM", r.x() + 4, y, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("REDEEM"), r.x() + 4, y, accent, false);
         y += 14;
 
         boolean narrow = r.width() < 320;
         CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, 104);
         drawPanel(ctx, card, Theme.CARD, Theme.BORDER, accent);
-        ctx.drawText(tr, "CODE", card.x() + 10, card.y() + 9, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("CODE"), card.x() + 10, card.y() + 9, accent, false);
         redeemFieldY = card.y() + 23;
         boolean busy = CosmeticsManager.busy();
         actionButton(ctx, tr, busy ? "Working..." : "Redeem", card.right() - 10, card.y() + 24,
@@ -775,7 +773,7 @@ public class CosmeticsScreen extends Screen {
 
         CosmeticsLayout.Rect cloud = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, 104);
         drawPanel(ctx, cloud, Theme.CARD_INNER, Theme.BORDER, accent);
-        ctx.drawText(tr, "CLOUD INVENTORY", cloud.x() + 10, cloud.y() + 8, accent, false);
+        ctx.drawText(tr, RkbUi.menuText("CLOUD INVENTORY"), cloud.x() + 10, cloud.y() + 8, accent, false);
         ctx.drawText(tr, fit(tr, CloudService.statusText(), cloud.width() - 20), cloud.x() + 10, cloud.y() + 22,
                 Theme.TEXT, false);
         String account = CloudStore.signedIn()

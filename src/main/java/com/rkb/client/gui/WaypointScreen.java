@@ -251,7 +251,7 @@ public class WaypointScreen extends Screen {
         handleMouse(mc, mx, my);
         hits.clear();
         TextRenderer tr = mc.textRenderer;
-        int accent = Theme.accent();
+        int accent = Theme.chromeAccent();
 
         RkbUi.background(ctx, width, height, System.currentTimeMillis());
         RkbUi.panel(ctx, new RkbUi.Rect(contentX, contentY, contentW, contentHBox), 0xE60E1422, RkbUi.LINE);

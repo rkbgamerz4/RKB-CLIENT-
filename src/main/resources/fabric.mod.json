@@ -13,6 +13,9 @@
     "client": ["com.rkb.client.RkbClient"]
   },
   "mixins": ["rkbclient.mixins.json"],
+  "suggests": {
+    "modmenu": "*"
+  },
   "depends": {
     "fabricloader": ">=0.18.2",
     "minecraft": "~1.21.11",

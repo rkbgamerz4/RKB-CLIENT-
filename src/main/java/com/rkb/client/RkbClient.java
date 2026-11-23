@@ -6,7 +6,7 @@ import com.rkb.client.cloud.CloudStore;
 import com.rkb.client.cloud.FriendsManager;
 import com.rkb.client.config.ConfigManager;
 import com.rkb.client.cosmetics.SkinSetStore;
-import com.rkb.client.gui.RkbMenuScreen;
+import com.rkb.client.gui.RkbModulesScreen;
 import com.rkb.client.hud.HudRenderer;
 import com.rkb.client.input.KeybindRegistry;
 import com.rkb.client.module.ModuleManager;
@@ -90,7 +90,7 @@ public class RkbClient implements ClientModInitializer {
             }
             if (menuRequested && mc.currentScreen == null) {
                 menuRequested = false;
-                mc.setScreen(new RkbMenuScreen());
+                mc.setScreen(new RkbModulesScreen());
             }
         } catch (Throwable t) {
             menuRequested = false;

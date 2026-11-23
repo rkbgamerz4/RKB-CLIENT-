@@ -31,7 +31,7 @@ public final class RkbScreens {
         MinecraftClient mc = MinecraftClient.getInstance();
         switch (index) {
             case 0 -> home();
-            case 1 -> mc.setScreen(new RkbMenuScreen(RkbMenuScreen.PAGE_SETTINGS));
+            case 1 -> mc.setScreen(new RkbSettingsScreen());
             case 2 -> mc.setScreen(new RkbMenuScreen(RkbMenuScreen.PAGE_PROFILES));
             case 3 -> mc.setScreen(new HudEditorScreen());
             case 4 -> mc.setScreen(new WaypointScreen());
@@ -39,6 +39,14 @@ public final class RkbScreens {
             case 6 -> mc.setScreen(new RkbMenuScreen(RkbMenuScreen.PAGE_ABOUT));
             default -> home();
         }
+    }
+
+    public static void modules() {
+        MinecraftClient.getInstance().setScreen(new RkbModulesScreen());
+    }
+
+    public static void settings() {
+        MinecraftClient.getInstance().setScreen(new RkbSettingsScreen());
     }
 
     public static void account() {

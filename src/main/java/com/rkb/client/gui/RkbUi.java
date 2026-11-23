@@ -2,6 +2,11 @@ package com.rkb.client.gui;
 
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Style;
+import net.minecraft.text.StyleSpriteSource;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 /**
  * Shared visual language for every RKB screen.
@@ -10,18 +15,27 @@ import net.minecraft.client.gui.DrawContext;
  * helpers are cheap immediate-mode draws and must be called from the Minecraft render thread only.
  */
 public final class RkbUi {
-    public static final int BG = 0xFF070A12;
-    public static final int SURFACE = 0xFF0E1422;
-    public static final int SURFACE_2 = 0xFF141D30;
-    public static final int SURFACE_3 = 0xFF0A101C;
-    public static final int ACCENT = 0xFF00A8FF;
-    public static final int ACCENT_2 = 0xFF246BFF;
-    public static final int TEXT = 0xFFF3F6FF;
-    public static final int MUTED = 0xFF96A8BE;
-    public static final int LINE = 0xFF1B263D;
-    public static final int SUCCESS = 0xFF43D99A;
-    public static final int WARNING = 0xFFFFC857;
-    public static final int DANGER = 0xFFFF7B7B;
+    public static final int BG = 0xFF101216;
+    public static final int SURFACE = 0xFF171A20;
+    public static final int SURFACE_2 = 0xFF1C2028;
+    public static final int SURFACE_3 = 0xFF222733;
+    public static final int CHROME_ACCENT = 0xFF3988D8;
+    public static final int CHROME_ACCENT_HOVER = 0xFF4B98E6;
+    public static final int ACCENT = CHROME_ACCENT;
+    public static final int ACCENT_2 = CHROME_ACCENT_HOVER;
+    public static final int TEXT = 0xFFF0F1F3;
+    public static final int MUTED = 0xFFA0A6B0;
+    public static final int DIM = 0xFF6F7682;
+    public static final int LINE = 0xFF292E38;
+    public static final int SUCCESS = 0xFF4E9E6A;
+    public static final int WARNING = 0xFFC9A24B;
+    public static final int DANGER = 0xFFC05A5A;
+    public static final int DANGER_BG = 0xFF2A1A1D;
+    public static final Identifier MENU_FONT = Identifier.of("rkbclient", "inter");
+
+    public static MutableText menuText(String s) {
+        return Text.literal(s).setStyle(Style.EMPTY.withFont(new StyleSpriteSource.Font(MENU_FONT)));
+    }
 
     public static final int TOP_H = 42;
     public static final int NAV_H = 26;
@@ -52,20 +66,7 @@ public final class RkbUi {
     }
 
     public static void background(DrawContext ctx, int width, int height, long millis) {
-        ctx.fillGradient(0, 0, width, height, 0xFF070A12, 0xFF0B1220);
-        float phase = (millis % 12000L) / 12000f;
-        int glowX = (int) (width * (0.18f + 0.08f * Math.sin(phase * Math.PI * 2)));
-        int glowY = (int) (height * 0.08f);
-        int glowW = Math.max(120, width / 3);
-        int glowH = Math.max(80, height / 2);
-        ctx.fillGradient(glowX, glowY, glowX + glowW, glowY + glowH, 0x2800A8FF, 0x0000A8FF);
-        ctx.fillGradient(width - glowW, height - glowH, width, height, 0x18246BFF, 0x00246BFF);
-
-        // Subtle diagonal pinstripes: texture without a panorama dependency.
-        for (int x = -height; x < width; x += 52) {
-            ctx.fill(x + 18, 0, x + 19, height, 0x0800A8FF);
-        }
-        ctx.fill(0, height - 2, width, height, 0xAA00A8FF);
+        ctx.fill(0, 0, width, height, BG);
     }
 
     public static void panel(DrawContext ctx, Rect r, int fill, int border) {

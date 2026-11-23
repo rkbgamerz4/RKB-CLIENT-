@@ -45,11 +45,19 @@ public final class CosmeticsLayout {
         int w = Math.max(160, screenWidth);
         int h = Math.max(160, screenHeight);
         int top = Math.max(0, reservedTop);
-        int margin = clamp(w / 90, 6, 12);
-        int panelW = Math.min(w - margin * 2, 1040);
-        int panelH = Math.min(h - top - margin * 2, 680);
-        int px = (w - panelW) / 2;
-        int py = top + (h - top - panelH) / 2;
+        RkbUi.Rect content = new RkbUi.Rect(0, top, w, h - top);
+        return of(content);
+    }
+
+    /** Layout inside an already-positioned content area (e.g. sidebar shell content). */
+    public static Layout of(RkbUi.Rect contentBounds) {
+        int w = Math.max(160, contentBounds.width());
+        int h = Math.max(160, contentBounds.height());
+        int margin = clamp(w / 90, 4, 10);
+        int panelW = Math.max(120, w - margin * 2);
+        int panelH = Math.max(100, h - margin * 2);
+        int px = contentBounds.x() + (w - panelW) / 2;
+        int py = contentBounds.y() + (h - panelH) / 2;
         int pad = clamp(panelW / 70, 8, 14);
 
         Rect panel = new Rect(px, py, panelW, panelH);

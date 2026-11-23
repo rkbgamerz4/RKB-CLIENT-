@@ -507,7 +507,7 @@ public class RkbMenuScreen extends Screen {
 
         hits.clear();
         TextRenderer tr = mc.textRenderer;
-        int accent = Theme.accent();
+        int accent = Theme.chromeAccent();
         RkbUi.background(ctx, width, height, System.currentTimeMillis());
         drawChrome(ctx, tr, accent, mx, my);
 

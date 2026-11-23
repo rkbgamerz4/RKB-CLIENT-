@@ -83,7 +83,7 @@ public class HudEditorScreen extends Screen {
         super.render(ctx, mx, my, delta);
         MinecraftClient mc = MinecraftClient.getInstance();
         TextRenderer tr = mc.textRenderer;
-        int accent = Theme.accent();
+        int accent = Theme.chromeAccent();
         hits.clear();
 
         RkbUi.background(ctx, width, height, System.currentTimeMillis());

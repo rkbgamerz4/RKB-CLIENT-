@@ -42,7 +42,7 @@ public class InterfaceModule extends Module {
 
     @Override
     public void onKeyPressed(MinecraftClient mc) {
-        mc.setScreen(new RkbMenuScreen());
+        mc.setScreen(new com.rkb.client.gui.RkbModulesScreen());
     }
 
     public int accent() {
