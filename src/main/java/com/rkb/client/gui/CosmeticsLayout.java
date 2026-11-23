@@ -37,20 +37,26 @@ public final class CosmeticsLayout {
     }
 
     public static Layout of(int screenWidth, int screenHeight) {
+        return of(screenWidth, screenHeight, 0);
+    }
+
+    /** Reserves space at the top for the shared RKB top bar. */
+    public static Layout of(int screenWidth, int screenHeight, int reservedTop) {
         int w = Math.max(160, screenWidth);
         int h = Math.max(160, screenHeight);
+        int top = Math.max(0, reservedTop);
         int margin = clamp(w / 90, 6, 12);
         int panelW = Math.min(w - margin * 2, 1040);
-        int panelH = Math.min(h - margin * 2, 680);
+        int panelH = Math.min(h - top - margin * 2, 680);
         int px = (w - panelW) / 2;
-        int py = (h - panelH) / 2;
+        int py = top + (h - top - panelH) / 2;
         int pad = clamp(panelW / 70, 8, 14);
 
         Rect panel = new Rect(px, py, panelW, panelH);
-        int headerH = clamp(panelH / 8, 44, 58);
+        int headerH = clamp(panelH / 8, 30, 58);
         Rect header = new Rect(px + pad, py + 3, panelW - pad * 2, headerH - 6);
 
-        int tabH = clamp(panelH / 11, 28, 36);
+        int tabH = clamp(panelH / 11, 24, 36);
         int tabY = py + headerH + 2;
         int tabGap = 5;
         int tabW = (panelW - pad * 2 - tabGap * (TABS.length - 1)) / TABS.length;
@@ -61,18 +67,23 @@ public final class CosmeticsLayout {
         }
 
         int contentY = tabs.bottom() + 8;
-        Rect content = new Rect(px + pad, contentY, panelW - pad * 2,
-                Math.max(40, panel.bottom() - pad - contentY));
-        boolean compact = content.width() < 520;
+        int contentH = Math.max(40, panel.bottom() - pad - contentY);
+        Rect content = new Rect(px + pad, contentY, panelW - pad * 2, contentH);
+        boolean narrow = content.width() < 520;
+        boolean shortBody = content.height() < 240;
+        boolean compact = narrow && !shortBody;
         Rect preview;
         Rect list;
         if (compact) {
             int previewH = clamp(content.height() * 45 / 100, 170, 230);
+            previewH = Math.min(previewH, Math.max(60, content.height() - 70));
             preview = new Rect(content.x(), content.y(), content.width(), previewH);
             list = new Rect(content.x(), preview.bottom() + 8, content.width(),
                     Math.max(30, content.bottom() - preview.bottom() - 8));
         } else {
-            int previewW = clamp(content.width() * 36 / 100, 190, 270);
+            int previewW = shortBody
+                    ? clamp(content.width() * 40 / 100, 120, 260)
+                    : clamp(content.width() * 36 / 100, 190, 270);
             preview = new Rect(content.x(), content.y(), previewW, content.height());
             list = new Rect(preview.right() + 10, content.y(),
                     Math.max(60, content.right() - preview.right() - 10), content.height());

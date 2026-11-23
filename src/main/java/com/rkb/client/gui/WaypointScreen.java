@@ -5,9 +5,13 @@ import com.rkb.client.waypoint.Waypoint;
 import com.rkb.client.waypoint.WaypointStore;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.input.CharInput;
+import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.input.MouseInput;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -16,7 +20,7 @@ import java.util.List;
 
 /** Waypoint list for the current server/world: add by name and coordinates, track, hide, delete. */
 public class WaypointScreen extends Screen {
-    private static final int ROW_H = 28;
+    private static final int ROW_H = 34;
 
     private record Hit(int x1, int y1, int x2, int y2, boolean inList, Runnable action) {
         boolean contains(int x, int y) {
@@ -37,7 +41,9 @@ public class WaypointScreen extends Screen {
     private String toast = "";
     private long toastUntil;
 
-    private int px, py, pw, ph, listX, listY, listW, listH;
+    private RkbLayout.TopBar chrome;
+    private int contentX, contentY, contentW, contentHBox, innerX, innerW;
+    private int formY, listX, listY, listW, listH;
     private boolean mouseWasDown;
     private boolean dragging;
     private boolean pressedInList;
@@ -53,15 +59,19 @@ public class WaypointScreen extends Screen {
         MinecraftClient mc = MinecraftClient.getInstance();
         worldKey = WaypointStore.worldKey(mc);
         dimKey = WaypointStore.dimKey(mc);
-        pw = Math.min(width - 12, 440);
-        ph = Math.min(height - 12, 280);
-        px = (width - pw) / 2;
-        py = (height - ph) / 2;
-        listX = px + 8;
-        listW = pw - 16;
-        int formY = py + 28;
-        listY = formY + 22;
-        listH = py + ph - 8 - listY;
+
+        chrome = RkbLayout.topBar(width, height);
+        contentX = 8;
+        contentW = width - 16;
+        contentY = chrome.contentTop();
+        contentHBox = height - contentY - 14;
+        innerX = contentX + 12;
+        innerW = contentW - 24;
+        formY = contentY + 48;
+        listX = innerX;
+        listW = innerW;
+        listY = formY + 36;
+        listH = Math.max(20, contentY + contentHBox - 12 - listY);
 
         String name = nameField == null ? "" : nameField.getText();
         String xs = xField == null || xField.getText().isEmpty()
@@ -71,44 +81,54 @@ public class WaypointScreen extends Screen {
         String zs = zField == null || zField.getText().isEmpty()
                 ? (mc.player == null ? "0" : String.valueOf(mc.player.getBlockZ())) : zField.getText();
 
-        int addW = 36;
-        int gap = 4;
-        int numW = Math.max(30, (listW - addW - gap * 4) / 4);
-        int nameW = listW - addW - numW * 3 - gap * 4;
-        int fx = listX;
-        nameField = field(mc, fx, formY, nameW, "Name", name, false);
+        int addW = 48;
+        int gap = 6;
+        int numW = Math.max(34, (innerW - addW - gap * 4) / 4);
+        int nameW = innerW - addW - numW * 3 - gap * 4;
+        int fx = innerX;
+        nameField = field(mc, fx + 7, formY + 7, nameW - 14, "Name", name, false);
         fx += nameW + gap;
-        xField = field(mc, fx, formY, numW, "X", xs, true);
+        xField = field(mc, fx + 7, formY + 7, numW - 14, "X", xs, true);
         fx += numW + gap;
-        yField = field(mc, fx, formY, numW, "Y", ys, true);
+        yField = field(mc, fx + 7, formY + 7, numW - 14, "Y", ys, true);
         fx += numW + gap;
-        zField = field(mc, fx, formY, numW, "Z", zs, true);
+        zField = field(mc, fx + 7, formY + 7, numW - 14, "Z", zs, true);
 
         mouseWasDown = KeyUtil.isMouseDown(mc, GLFW.GLFW_MOUSE_BUTTON_LEFT);
     }
 
     private TextFieldWidget field(MinecraftClient mc, int x, int y, int w, String label, String value, boolean numeric) {
-        TextFieldWidget f = new TextFieldWidget(mc.textRenderer, x, y, w, 16, Text.literal(label));
+        TextFieldWidget f = new TextFieldWidget(mc.textRenderer, x, y, w, 12, Text.literal(label));
         f.setMaxLength(numeric ? 9 : 24);
         if (numeric) {
             f.setTextPredicate(s -> s.matches("-?\\d*"));
         }
         f.setPlaceholder(Text.literal(label));
         f.setText(value);
+        f.setDrawsBackground(false);
         addSelectableChild(f);
         return f;
     }
 
+    @Override
     public boolean shouldPause() {
         return false;
     }
 
+    @Override
     public void removed() {
         WaypointStore.save();
     }
 
+    @Override
+    public void close() {
+        WaypointStore.save();
+        RkbScreens.close();
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        scroll -= (float) (verticalAmount * 18.0);
+        scroll -= (float) (verticalAmount * 20.0);
         return true;
     }
 
@@ -162,14 +182,14 @@ public class WaypointScreen extends Screen {
     }
 
     private void click(int mx, int my) {
-        if (nameField.isMouseOver(mx, my) || xField.isMouseOver(mx, my)
-                || yField.isMouseOver(mx, my) || zField.isMouseOver(mx, my)) {
+        TextFieldWidget field = fieldAt(mx, my);
+        if (field != null) {
+            clearFocus();
+            field.setFocused(true);
+            field.mouseClicked(new Click(mx, my, new MouseInput(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)), false);
             return;
         }
-        nameField.setFocused(false);
-        xField.setFocused(false);
-        yField.setFocused(false);
-        zField.setFocused(false);
+        clearFocus();
         for (int i = hits.size() - 1; i >= 0; i--) {
             Hit h = hits.get(i);
             if (h.contains(mx, my) && (!h.inList() || inList(mx, my))) {
@@ -179,12 +199,48 @@ public class WaypointScreen extends Screen {
         }
     }
 
+    private TextFieldWidget fieldAt(int mx, int my) {
+        for (TextFieldWidget f : new TextFieldWidget[]{nameField, xField, yField, zField}) {
+            if (f != null && f.isMouseOver(mx, my)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private void clearFocus() {
+        for (TextFieldWidget f : new TextFieldWidget[]{nameField, xField, yField, zField}) {
+            if (f != null) {
+                f.setFocused(false);
+            }
+        }
+    }
+
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        for (TextFieldWidget f : new TextFieldWidget[]{nameField, xField, yField, zField}) {
+            if (f != null && f.isFocused() && f.keyPressed(input)) {
+                return true;
+            }
+        }
+        return super.keyPressed(input);
+    }
+
+    @Override
+    public boolean charTyped(CharInput input) {
+        for (TextFieldWidget f : new TextFieldWidget[]{nameField, xField, yField, zField}) {
+            if (f != null && f.isFocused() && f.charTyped(input)) {
+                return true;
+            }
+        }
+        return super.charTyped(input);
+    }
+
     private int button(DrawContext c, TextRenderer tr, String label, int right, int y, boolean inList, Runnable action) {
-        int w = tr.getWidth(label) + 10;
+        int w = Math.max(36, tr.getWidth(label) + 14);
         int x = right - w;
-        c.fill(x, y, right, y + 13, Theme.BORDER);
-        c.drawText(tr, label, x + 5, y + 3, Theme.TEXT, false);
-        hits.add(new Hit(x, y, right, y + 13, inList, action));
+        RkbUi.button(c, tr, new RkbUi.Rect(x, y, w, 18), label, false, false, true);
+        hits.add(new Hit(x, y, right, y + 18, inList, action));
         return x;
     }
 
@@ -197,31 +253,28 @@ public class WaypointScreen extends Screen {
         TextRenderer tr = mc.textRenderer;
         int accent = Theme.accent();
 
-        ctx.fill(px - 1, py - 1, px + pw + 1, py + ph + 1, Theme.BORDER);
-        ctx.fill(px, py, px + pw, py + ph, Theme.PANEL);
-        ctx.fill(px, py, px + pw, py + 22, Theme.BLACK);
-        ctx.drawText(tr, "Waypoints", px + 8, py + 7, accent, false);
-        String where = dimKey.replace("minecraft:", "");
-        ctx.drawText(tr, where, px + 8 + tr.getWidth("Waypoints") + 10, py + 7, Theme.MUTED, false);
-        int backW = tr.getWidth("Back") + 12;
-        int backX = px + pw - 8 - backW;
-        ctx.fill(backX, py + 4, backX + backW, py + 18, Theme.CARD);
-        ctx.drawText(tr, "Back", backX + 6, py + 8, Theme.TEXT, false);
-        hits.add(new Hit(backX, py + 4, backX + backW, py + 18, false, () -> {
-            WaypointStore.save();
-            MinecraftClient.getInstance().setScreen(new RkbMenuScreen());
-        }));
+        RkbUi.background(ctx, width, height, System.currentTimeMillis());
+        RkbUi.panel(ctx, new RkbUi.Rect(contentX, contentY, contentW, contentHBox), 0xE60E1422, RkbUi.LINE);
+        ctx.drawText(tr, "Waypoints", innerX, contentY + 12, RkbUi.TEXT, false);
+        String where = "Current world: " + dimKey.replace("minecraft:", "");
+        ctx.drawText(tr, RkbUi.fit(tr, where, innerW - 120), innerX, contentY + 26, RkbUi.MUTED, false);
 
-        nameField.render(ctx, mx, my, delta);
-        xField.render(ctx, mx, my, delta);
-        yField.render(ctx, mx, my, delta);
-        zField.render(ctx, mx, my, delta);
-        int addW = 36;
-        int addX = px + pw - 8 - addW;
-        int formY = py + 28;
-        ctx.fill(addX, formY, addX + addW, formY + 16, accent);
-        ctx.drawText(tr, "Add", addX + (addW - tr.getWidth("Add")) / 2, formY + 4, Theme.BLACK, false);
-        hits.add(new Hit(addX, formY, addX + addW, formY + 16, false, this::addFromForm));
+        int addW = 48;
+        int gap = 6;
+        int numW = Math.max(34, (innerW - addW - gap * 4) / 4);
+        int nameW = innerW - addW - numW * 3 - gap * 4;
+        int fx = innerX;
+        drawFieldBox(ctx, nameField, fx, formY, nameW, "Name", accent);
+        fx += nameW + gap;
+        drawFieldBox(ctx, xField, fx, formY, numW, "X", accent);
+        fx += numW + gap;
+        drawFieldBox(ctx, yField, fx, formY, numW, "Y", accent);
+        fx += numW + gap;
+        drawFieldBox(ctx, zField, fx, formY, numW, "Z", accent);
+
+        RkbUi.Rect add = new RkbUi.Rect(fx + numW + gap, formY, addW, 20);
+        RkbUi.button(ctx, tr, add, "Add", add.contains(mx, my), true, true);
+        hits.add(new Hit(add.x(), add.y(), add.right(), add.bottom(), false, this::addFromForm));
 
         List<Waypoint> list = WaypointStore.all(worldKey);
         String tracked = WaypointStore.tracked(worldKey);
@@ -236,65 +289,70 @@ public class WaypointScreen extends Screen {
             if (y + ROW_H >= listY && y <= listY + listH) {
                 boolean here = w.dim.equals(dimKey);
                 boolean isTracked = w.name.equals(tracked);
-                ctx.fill(listX, y, listX + listW - 6, y + ROW_H - 2, Theme.CARD);
+                RkbUi.roundedFill(ctx, new RkbUi.Rect(listX, y, listW - 6, ROW_H - 4),
+                        isTracked ? 0xFF152438 : RkbUi.SURFACE);
                 int color = WaypointStore.COLORS[w.color % WaypointStore.COLORS.length];
-                ctx.fill(listX, y, listX + 3, y + ROW_H - 2, w.visible ? color : Theme.OFF);
+                ctx.fill(listX + 2, y + 4, listX + 4, y + ROW_H - 8, w.visible ? color : 0xFF26324A);
 
                 String title = w.name;
                 if (here && mc.player != null) {
                     int d = (int) Math.round(Math.hypot(w.x + 0.5 - mc.player.getX(), w.z + 0.5 - mc.player.getZ()));
-                    title += "  " + d + "m";
+                    title += "  ·  " + d + "m";
                 }
                 int bx = right;
-                bx = button(ctx, tr, "Del", bx - 4, y + 3, true, () -> {
+                bx = button(ctx, tr, "Del", bx - 4, y + 8, true, () -> {
                     WaypointStore.remove(worldKey, w);
                     toast("Deleted " + w.name);
                 });
-                bx = button(ctx, tr, w.visible ? "Hide" : "Show", bx - 4, y + 3, true, () -> {
+                bx = button(ctx, tr, w.visible ? "Hide" : "Show", bx - 4, y + 8, true, () -> {
                     w.visible = !w.visible;
                     WaypointStore.save();
                 });
-                bx = button(ctx, tr, isTracked ? "Untrack" : "Track", bx - 4, y + 3, true,
+                bx = button(ctx, tr, isTracked ? "Untrack" : "Track", bx - 4, y + 8, true,
                         () -> WaypointStore.setTracked(worldKey, isTracked ? "" : w.name));
 
-                int textMax = bx - listX - 14;
-                ctx.drawText(tr, fit(tr, title, textMax), listX + 8, y + 5, isTracked ? accent : Theme.TEXT, false);
-                String sub = w.x + " " + w.y + " " + w.z + (here ? "" : "  (" + w.dim.replace("minecraft:", "") + ")");
-                ctx.drawText(tr, fit(tr, sub, textMax), listX + 8, y + 16, Theme.MUTED, false);
+                int textMax = bx - listX - 16;
+                ctx.drawText(tr, RkbUi.fit(tr, title, Math.max(20, textMax)), listX + 10, y + 7,
+                        isTracked ? accent : RkbUi.TEXT, false);
+                String sub = w.x + " " + w.y + " " + w.z
+                        + (here ? "" : "  (" + w.dim.replace("minecraft:", "") + ")");
+                ctx.drawText(tr, RkbUi.fit(tr, sub, Math.max(20, textMax)), listX + 10, y + 19,
+                        RkbUi.MUTED, false);
             }
             y += ROW_H;
         }
         ctx.disableScissor();
         contentH = list.size() * ROW_H;
         if (list.isEmpty()) {
-            ctx.drawText(tr, "No waypoints yet. Fill the form and press Add.", listX + 2, listY + 4, Theme.MUTED, false);
+            ctx.drawText(tr, "No waypoints yet. Fill the form and press Add.", listX + 4, listY + 8, RkbUi.MUTED, false);
         }
         if (contentH > listH) {
             int barH = Math.max(16, listH * listH / contentH);
             int barPos = listY + (int) ((listH - barH) * (scroll / Math.max(1f, contentH - listH)));
-            ctx.fill(listX + listW - 3, barPos, listX + listW - 1, barPos + barH, accent);
+            RkbUi.roundedFill(ctx, new RkbUi.Rect(listX + listW - 3, barPos, 3, barH), accent);
         }
         if (System.currentTimeMillis() < toastUntil) {
-            int tw = tr.getWidth(toast) + 16;
-            int tx = px + (pw - tw) / 2;
-            int ty = py + ph - 24;
-            ctx.fill(tx, ty, tx + tw, ty + 16, Theme.BLACK);
-            ctx.drawText(tr, toast, tx + 8, ty + 4, Theme.TEXT, false);
+            int tw = tr.getWidth(toast) + 22;
+            int tx = contentX + (contentW - tw) / 2;
+            int ty = contentY + contentHBox - 26;
+            RkbUi.panel(ctx, new RkbUi.Rect(tx, ty, tw, 20), 0xF00E1422, accent);
+            ctx.drawText(tr, toast, tx + 11, ty + 6, RkbUi.TEXT, false);
         }
+
+        RkbChrome.draw(ctx, tr, chrome, mx, my, 4, (r, action) -> hits.add(new Hit(r.x(), r.y(), r.right(),
+                r.bottom(), false, action)));
     }
 
-    private static String fit(TextRenderer tr, String s, int maxW) {
-        if (maxW <= 0) {
-            return "";
+    private void drawFieldBox(DrawContext ctx, TextFieldWidget field, int x, int y, int w, String label, int accent) {
+        RkbUi.Rect box = new RkbUi.Rect(x, y, w, 20);
+        RkbUi.panel(ctx, box, field.isFocused() ? 0xFF101A2C : RkbUi.SURFACE_3,
+                field.isFocused() ? accent : RkbUi.LINE);
+        field.setX(x + 7);
+        field.setY(y + 7);
+        field.setWidth(Math.max(10, w - 14));
+        field.render(ctx, 0, 0, 0);
+        if (field.getText().isEmpty()) {
+            ctx.drawText(textRenderer, label, x + 7, y + 6, RkbUi.MUTED, false);
         }
-        if (tr.getWidth(s) <= maxW) {
-            return s;
-        }
-        int ew = tr.getWidth("..");
-        int n = s.length();
-        while (n > 0 && tr.getWidth(s.substring(0, n)) + ew > maxW) {
-            n--;
-        }
-        return s.substring(0, n) + "..";
     }
 }

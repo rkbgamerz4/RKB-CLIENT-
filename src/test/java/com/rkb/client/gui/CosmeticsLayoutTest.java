@@ -51,6 +51,31 @@ class CosmeticsLayoutTest {
         }
     }
 
+    @Test
+    void shortLandscapeKeepsBodyInsidePanel() {
+        int[][] cases = {{600, 270, 74}, {360, 240, 104}, {640, 360, 74}};
+        for (int[] c : cases) {
+            CosmeticsLayout.Layout layout = CosmeticsLayout.of(c[0], c[1], c[2]);
+            assertInside(layout.panel(), layout.preview());
+            assertInside(layout.panel(), layout.list());
+            assertFalse(layout.preview().overlaps(layout.list()));
+            assertTrue(layout.preview().height() >= 40);
+            for (CosmeticsLayout.Rect tab : layout.tabRects()) {
+                assertInside(layout.panel(), tab);
+            }
+        }
+    }
+
+    @Test
+    void reservedTopKeepsPanelBelowSharedNavigation() {
+        CosmeticsLayout.Layout layout = CosmeticsLayout.of(854, 480, 74);
+        assertTrue(layout.panel().y() >= 74);
+        assertTrue(layout.panel().bottom() <= 480 - 6);
+        assertInside(layout.panel(), layout.preview());
+        assertInside(layout.panel(), layout.list());
+        assertEquals(3, layout.tabRects().size());
+    }
+
     private static void assertInside(CosmeticsLayout.Rect outer, CosmeticsLayout.Rect inner) {
         assertTrue(inner.x() >= outer.x());
         assertTrue(inner.y() >= outer.y());

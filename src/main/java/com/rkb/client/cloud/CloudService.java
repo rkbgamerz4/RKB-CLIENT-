@@ -46,6 +46,9 @@ public final class CloudService {
     private static ScheduledFuture<?> syncTask;
     private static volatile Status status = Status.IDLE;
     private static volatile String lastError = "";
+    private static volatile boolean authBusy;
+    private static volatile boolean authOk;
+    private static volatile String authMessage = "";
     private static volatile boolean stopping;
     private static final RateLimiter MANUAL_SYNC = new RateLimiter(5_000);
 
@@ -134,6 +137,26 @@ public final class CloudService {
         return status;
     }
 
+    /** Display-only account snapshot. Tokens never leave CloudStore. */
+    public static AuthState authState() {
+        return new AuthState(!CloudStore.anonKey().isEmpty(), CloudStore.signedIn(), isLinked(),
+                authBusy, authOk, CloudStore.email(), authMessage);
+    }
+
+    public static boolean authBusy() {
+        return authBusy;
+    }
+
+    public static String authMessage() {
+        return authMessage;
+    }
+
+    private static void setAuth(boolean busy, boolean ok, String message) {
+        authBusy = busy;
+        authOk = ok;
+        authMessage = message == null ? "" : message;
+    }
+
     public static String statusText() {
         if (!cloudAllowed()) {
             return CloudStore.anonKey().isEmpty() ? "Missing publishable key" : "Signed out";
@@ -208,28 +231,43 @@ public final class CloudService {
 
     public static void login(String email, String password) {
         if (CloudStore.anonKey().isEmpty()) {
+            setAuth(false, false, "Cloud is not configured: publishable key missing.");
             notifyPlayer("Add your Supabase publishable key as \"anonKey\" in config/rkbclient-cloud.json first.");
             return;
         }
+        if (email == null || email.isBlank() || password == null || password.isEmpty()) {
+            setAuth(false, false, "Enter your e-mail and password.");
+            return;
+        }
+        if (authBusy) {
+            return;
+        }
+        setAuth(true, false, "Signing in...");
         notifyPlayer("Signing in...");
         background(() -> {
             try {
                 JsonObject body = new JsonObject();
-                body.addProperty("email", email);
+                body.addProperty("email", email.trim());
                 body.addProperty("password", password);
                 storeSession(http("POST", CloudStore.url() + "/auth/v1/token?grant_type=password", body,
                         CloudStore.anonKey()));
-                notifyPlayer("Signed in as " + CloudStore.email() + ".");
+                String who = CloudStore.email().isBlank() ? "your RKB account" : CloudStore.email();
+                setAuth(false, true, "Signed in as " + who + ".");
+                notifyPlayer("Signed in as " + who + ".");
                 startCloudTasks();
                 syncNow(true);
                 MinecraftClient.getInstance().execute(CloudService::onBadgeFeatureChanged);
             } catch (CloudException e) {
-                notifyPlayer(e.status() == 400 || e.status() == 401
-                        ? "Sign in failed: wrong email or password." : "Sign in failed: " + e.getMessage());
+                String msg = e.status() == 400 || e.status() == 401
+                        ? "Wrong e-mail or password." : "Sign in failed: " + e.getMessage();
+                setAuth(false, false, msg);
+                notifyPlayer("Sign in failed: " + msg);
             } catch (IOException e) {
+                setAuth(false, false, "Could not reach the server. Local mode is still available.");
                 notifyPlayer("Could not reach the server. You are offline; local settings still work.");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                setAuth(false, false, "Sign in was interrupted.");
             }
         });
     }
@@ -237,31 +275,46 @@ public final class CloudService {
     /** Creates a new RKB account (Supabase Auth sign-up). */
     public static void register(String email, String password) {
         if (CloudStore.anonKey().isEmpty()) {
+            setAuth(false, false, "Cloud is not configured: publishable key missing.");
             notifyPlayer("Add your Supabase publishable key as \"anonKey\" in config/rkbclient-cloud.json first.");
             return;
         }
+        if (email == null || email.isBlank() || password == null || password.length() < 6) {
+            setAuth(false, false, "Use a valid e-mail and a password of at least 6 characters.");
+            return;
+        }
+        if (authBusy) {
+            return;
+        }
+        setAuth(true, false, "Creating your RKB account...");
         notifyPlayer("Creating your RKB account...");
         background(() -> {
             try {
                 JsonObject body = new JsonObject();
-                body.addProperty("email", email);
+                body.addProperty("email", email.trim());
                 body.addProperty("password", password);
                 JsonObject res = http("POST", CloudStore.url() + "/auth/v1/signup", body, CloudStore.anonKey());
                 if (res.has("access_token")) {
                     storeSession(res);
-                    notifyPlayer("Account created and signed in as " + CloudStore.email() + ".");
+                    String who = CloudStore.email().isBlank() ? "your RKB account" : CloudStore.email();
+                    setAuth(false, true, "Account created and signed in as " + who + ".");
+                    notifyPlayer("Account created and signed in as " + who + ".");
                     startCloudTasks();
                     syncNow(true);
                     MinecraftClient.getInstance().execute(CloudService::onBadgeFeatureChanged);
                 } else {
-                    notifyPlayer("Account created. Check your e-mail to confirm it, then run /rkb cloud login.");
+                    setAuth(false, true, "Account created. Check your e-mail, then sign in.");
+                    notifyPlayer("Account created. Check your e-mail to confirm it, then sign in.");
                 }
             } catch (CloudException e) {
+                setAuth(false, false, "Sign up failed: " + e.getMessage());
                 notifyPlayer("Sign up failed: " + e.getMessage());
             } catch (IOException e) {
+                setAuth(false, false, "Could not reach the server. Try again when you are online.");
                 notifyPlayer("Could not reach the server. Try again when you are online.");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                setAuth(false, false, "Sign up was interrupted.");
             }
         });
     }
@@ -274,6 +327,7 @@ public final class CloudService {
         RemoteCosmetics.clearRemote();
         status = Status.IDLE;
         lastError = "";
+        setAuth(false, false, "Signed out. Local skins and friends are kept.");
         notifyPlayer("Signed out. Local skins and friends are kept.");
     }
 
@@ -373,6 +427,7 @@ public final class CloudService {
             if (e.status() == 401) {
                 CloudStore.clearSession();
                 lastError = "signed_out";
+                setAuth(false, false, "Your RKB session ended. Sign in again.");
             } else if (e.status() == 403 && (lastError.equals("not_linked")
                     || lastError.equals("identity_not_verified") || lastError.equals("link_required"))) {
                 CloudStore.setLinked("", null);

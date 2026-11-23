@@ -28,8 +28,8 @@ public class MapScreen extends Screen {
     private static final int CELL = 4;
     private static final int MAX_COLS = 140;
     private static final int MAX_ROWS = 80;
-    private static final int HEADER = 20;
-    private static final int FOOTER = 26;
+    private static final int HEADER = 34;
+    private static final int FOOTER = 34;
 
     private record Hit(int x1, int y1, int x2, int y2, Runnable action) {
         boolean contains(int x, int y) {
@@ -69,6 +69,8 @@ public class MapScreen extends Screen {
     private boolean dragging;
     private boolean pressedInMap;
     private int pressX, pressY, lastX, lastY;
+    private RkbLayout.TopBar chrome;
+    private int contentY;
 
     public MapScreen() {
         super(Text.literal("RKB Map"));
@@ -79,10 +81,12 @@ public class MapScreen extends Screen {
         MinecraftClient mc = MinecraftClient.getInstance();
         worldKey = WaypointStore.worldKey(mc);
         dimKey = WaypointStore.dimKey(mc);
-        mapX = 6;
-        mapY = HEADER + 4;
-        mapW = width - 12;
-        mapH = height - mapY - FOOTER - 2;
+        chrome = RkbLayout.topBar(width, height);
+        contentY = chrome.contentTop();
+        mapX = 8;
+        mapY = contentY + HEADER + 4;
+        mapW = width - 16;
+        mapH = Math.max(40, height - mapY - FOOTER - 2);
         cols = Math.max(8, Math.min(MAX_COLS, mapW / CELL));
         rows = Math.max(8, Math.min(MAX_ROWS, mapH / CELL));
         grid = new int[cols * rows];
@@ -113,7 +117,7 @@ public class MapScreen extends Screen {
     public boolean keyPressed(KeyInput input) {
         KeyBinding mapKey = KeybindRegistry.actionBinding("minimap", "open_map");
         if (mapKey != null && mapKey.matchesKey(input)) {
-            MinecraftClient.getInstance().setScreen(null);
+            RkbScreens.close();
             return true;
         }
         return super.keyPressed(input);
@@ -265,11 +269,10 @@ public class MapScreen extends Screen {
     }
 
     private int button(DrawContext c, TextRenderer tr, String label, int x, int y, Runnable action) {
-        int w = tr.getWidth(label) + 12;
-        c.fill(x, y, x + w, y + 14, Theme.BORDER);
-        c.drawText(tr, label, x + 6, y + 3, Theme.TEXT, false);
-        hits.add(new Hit(x, y, x + w, y + 14, action));
-        return x + w + 4;
+        int w = Math.max(42, tr.getWidth(label) + 16);
+        RkbUi.button(c, tr, new RkbUi.Rect(x, y, w, 18), label, false, false, true);
+        hits.add(new Hit(x, y, x + w, y + 18, action));
+        return x + w + 5;
     }
 
     @Override
@@ -282,29 +285,32 @@ public class MapScreen extends Screen {
         TextRenderer tr = mc.textRenderer;
         int accent = Theme.accent();
 
-        ctx.fill(0, 0, width, HEADER, Theme.BLACK);
-        ctx.drawText(tr, "Map", 8, 6, accent, false);
-        ctx.drawText(tr, dimKey.replace("minecraft:", "") + "   1 cell = " + BPC[zoomIdx] + " block"
-                + (BPC[zoomIdx] > 1 ? "s" : ""), 8 + tr.getWidth("Map") + 10, 6, Theme.MUTED, false);
+        RkbUi.background(ctx, width, height, System.currentTimeMillis());
+
+        RkbUi.panel(ctx, new RkbUi.Rect(8, contentY, width - 16, HEADER), 0xE60E1422, RkbUi.LINE);
+        ctx.drawText(tr, "Map", 20, contentY + 8, RkbUi.TEXT, false);
+        ctx.drawText(tr, dimKey.replace("minecraft:", "") + "  ·  1 cell = " + BPC[zoomIdx] + " block"
+                + (BPC[zoomIdx] > 1 ? "s" : ""), 20 + tr.getWidth("Map") + 10, contentY + 8, RkbUi.MUTED, false);
+        ctx.drawText(tr, "Drag to pan  ·  scroll to zoom  ·  tap to select", 20, contentY + 21,
+                RkbUi.MUTED, false);
         if (inMap(mx, my) && haveData) {
             int wx = originX + Math.round((mx - gx - panX) / (float) CELL * bpc - 0.5f);
             int wz = originZ + Math.round((my - gy - panY) / (float) CELL * bpc - 0.5f);
             String c = wx + ", " + wz;
-            ctx.drawText(tr, c, width - 8 - tr.getWidth(c), 6, Theme.TEXT, false);
+            ctx.drawText(tr, c, width - 20 - tr.getWidth(c), contentY + 13, RkbUi.TEXT, false);
         }
 
-        ctx.fill(mapX - 1, mapY - 1, mapX + mapW + 1, mapY + mapH + 1, Theme.BORDER);
-        ctx.fill(mapX, mapY, mapX + mapW, mapY + mapH, 0xFF05080F);
+        RkbUi.panel(ctx, new RkbUi.Rect(mapX - 1, mapY - 1, mapW + 2, mapH + 2), 0xFF05080F, RkbUi.LINE);
         ctx.enableScissor(mapX, mapY, mapX + mapW, mapY + mapH);
         if (haveData) {
             mesh.draw(ctx, gx + panX, gy + panY, CELL);
             drawMarkers(ctx, mc, tr, accent);
         } else {
-            ctx.drawText(tr, "Loading map...", mapX + 8, mapY + 8, Theme.MUTED, false);
+            ctx.drawText(tr, "Loading map...", mapX + 8, mapY + 8, RkbUi.MUTED, false);
         }
         ctx.disableScissor();
 
-        int fy = height - FOOTER + 4;
+        int fy = height - FOOTER + 7;
         int bx = 8;
         bx = button(ctx, tr, "+ Waypoint", bx, fy, this::addWaypointAtSelection);
         bx = button(ctx, tr, "Zoom -", bx, fy, () -> changeZoom(-1));
@@ -320,21 +326,24 @@ public class MapScreen extends Screen {
             }
         });
         String close = "Close";
-        int cw = tr.getWidth(close) + 12;
+        int cw = Math.max(56, tr.getWidth(close) + 24);
         int closeX = width - 8 - cw;
-        ctx.fill(closeX, fy, closeX + cw, fy + 14, accent);
-        ctx.drawText(tr, close, closeX + 6, fy + 3, Theme.BLACK, false);
-        hits.add(new Hit(closeX, fy, closeX + cw, fy + 14, () -> MinecraftClient.getInstance().setScreen(null)));
+        RkbUi.Rect closeRect = new RkbUi.Rect(closeX, fy, cw, 18);
+        RkbUi.button(ctx, tr, closeRect, close, closeRect.contains(mx, my), true, true);
+        hits.add(new Hit(closeX, fy, closeX + cw, fy + 18, RkbScreens::close));
         if (hasSel) {
             String sel = "Selected " + selX + ", " + selZ;
-            ctx.drawText(tr, sel, Math.max(bx + 4, closeX - 8 - tr.getWidth(sel)), fy + 3, Theme.TEXT, false);
+            ctx.drawText(tr, sel, Math.max(bx + 4, closeX - 8 - tr.getWidth(sel)), fy + 5, RkbUi.TEXT, false);
         }
         if (System.currentTimeMillis() < toastUntil) {
-            int tw = tr.getWidth(toast) + 16;
+            int tw = tr.getWidth(toast) + 22;
             int tx = (width - tw) / 2;
-            ctx.fill(tx, mapY + 6, tx + tw, mapY + 22, Theme.BLACK);
-            ctx.drawText(tr, toast, tx + 8, mapY + 10, Theme.TEXT, false);
+            RkbUi.panel(ctx, new RkbUi.Rect(tx, mapY + 6, tw, 20), 0xF00E1422, accent);
+            ctx.drawText(tr, toast, tx + 11, mapY + 12, RkbUi.TEXT, false);
         }
+
+        RkbChrome.draw(ctx, tr, chrome, mx, my, RkbUi.NAV_NONE,
+                (r, action) -> hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), action)));
     }
 
     private void drawMarkers(DrawContext ctx, MinecraftClient mc, TextRenderer tr, int accent) {

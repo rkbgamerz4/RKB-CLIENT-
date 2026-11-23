@@ -17,14 +17,19 @@ import java.util.List;
 
 /** Drag HUD elements to a new position. The nearest screen corner becomes their anchor. */
 public class HudEditorScreen extends Screen {
-    private static final int BTN_Y = 6;
-    private static final int BTN_H = 16;
+    private record Hit(RkbUi.Rect rect, Runnable action) {
+    }
 
     private final List<HudModule> hud = new ArrayList<>();
+    private final List<Hit> hits = new ArrayList<>();
     private HudModule dragging;
     private int grabX;
     private int grabY;
     private boolean mouseWasDown;
+
+    private RkbLayout.TopBar chrome;
+    private int contentY;
+    private int headerH = 40;
 
     public HudEditorScreen() {
         super(Text.literal("RKB HUD Editor"));
@@ -38,32 +43,39 @@ public class HudEditorScreen extends Screen {
                 hud.add(h);
             }
         }
+        chrome = RkbLayout.topBar(width, height);
+        contentY = chrome.contentTop();
         mouseWasDown = KeyUtil.isMouseDown(MinecraftClient.getInstance(), GLFW.GLFW_MOUSE_BUTTON_LEFT);
     }
 
+    @Override
     public boolean shouldPause() {
         return false;
     }
 
+    @Override
     public void removed() {
         ConfigManager.save();
     }
 
-    private static boolean inside(int mx, int my, int x, int y, int w, int h) {
-        return mx >= x && mx < x + w && my >= y && my < y + h;
-    }
-
-    private static void box(DrawContext c, int x, int y, int w, int h, int color) {
-        c.fill(x, y, x + w, y + 1, color);
-        c.fill(x, y + h - 1, x + w, y + h, color);
-        c.fill(x, y, x + 1, y + h, color);
-        c.fill(x + w - 1, y, x + w, y + h, color);
-    }
-
-    private static void button(DrawContext c, TextRenderer tr, String label, int x, int w, boolean hover) {
-        c.fill(x, BTN_Y, x + w, BTN_Y + BTN_H, hover ? Theme.CARD_HOVER : Theme.CARD);
-        box(c, x, BTN_Y, w, BTN_H, Theme.accent());
-        c.drawText(tr, label, x + (w - tr.getWidth(label)) / 2, BTN_Y + 4, Theme.TEXT, false);
+    private void click(int mx, int my) {
+        for (int i = hits.size() - 1; i >= 0; i--) {
+            if (hits.get(i).rect().contains(mx, my)) {
+                hits.get(i).action().run();
+                return;
+            }
+        }
+        for (int i = hud.size() - 1; i >= 0; i--) {
+            HudModule h = hud.get(i);
+            if (h.isEnabled() && h.boundsW() > 0
+                    && mx >= h.boundsX() && mx < h.boundsX() + h.boundsW()
+                    && my >= h.boundsY() && my < h.boundsY() + h.boundsH()) {
+                dragging = h;
+                grabX = mx - h.boundsX();
+                grabY = my - h.boundsY();
+                break;
+            }
+        }
     }
 
     @Override
@@ -72,7 +84,9 @@ public class HudEditorScreen extends Screen {
         MinecraftClient mc = MinecraftClient.getInstance();
         TextRenderer tr = mc.textRenderer;
         int accent = Theme.accent();
+        hits.clear();
 
+        RkbUi.background(ctx, width, height, System.currentTimeMillis());
         boolean any = false;
         for (HudModule h : hud) {
             h.renderSafe(ctx, mc);
@@ -80,46 +94,43 @@ public class HudEditorScreen extends Screen {
         for (HudModule h : hud) {
             if (h.isEnabled() && h.boundsW() > 0) {
                 any = true;
-                int color = h == dragging ? Theme.TEXT : accent;
-                box(ctx, h.boundsX() - 1, h.boundsY() - 1, h.boundsW() + 2, h.boundsH() + 2, color);
-                ctx.drawText(tr, h.name(), h.boundsX(), Math.max(0, h.boundsY() - 11), color, true);
+                int color = h == dragging ? RkbUi.TEXT : accent;
+                RkbUi.roundedOutline(ctx, new RkbUi.Rect(h.boundsX() - 1, h.boundsY() - 1,
+                        h.boundsW() + 2, h.boundsH() + 2), color);
+                ctx.drawText(tr, h.name(), h.boundsX(), Math.max(0, h.boundsY() - 11), color, false);
             }
         }
 
-        int doneW = tr.getWidth("Done") + 16;
-        int resetW = tr.getWidth("Reset positions") + 16;
-        int startX = (width - (doneW + resetW + 6)) / 2;
-        int resetX = startX + doneW + 6;
-        button(ctx, tr, "Done", startX, doneW, inside(mx, my, startX, BTN_Y, doneW, BTN_H));
-        button(ctx, tr, "Reset positions", resetX, resetW, inside(mx, my, resetX, BTN_Y, resetW, BTN_H));
-        String hint = any ? "Drag an element to move it. Esc to close."
-                : "No HUD element is on. Enable some in the menu first.";
-        ctx.drawText(tr, hint, (width - tr.getWidth(hint)) / 2, BTN_Y + BTN_H + 6, Theme.MUTED, false);
+        RkbUi.Rect header = new RkbUi.Rect(8, contentY, width - 16, headerH);
+        RkbUi.panel(ctx, header, 0xE60E1422, RkbUi.LINE);
+        ctx.drawText(tr, "HUD Editor", header.x() + 12, header.y() + 9, RkbUi.TEXT, false);
+
+        int doneW = Math.max(58, tr.getWidth("Done") + 24);
+        int resetW = Math.max(96, tr.getWidth("Reset positions") + 24);
+        RkbUi.Rect done = new RkbUi.Rect(header.right() - 12 - doneW, header.y() + 10, doneW, 20);
+        RkbUi.Rect reset = new RkbUi.Rect(done.x() - 8 - resetW, header.y() + 10, resetW, 20);
+        String hint = any ? "Drag any element to move it. Corners are the anchors."
+                : "No HUD element is on. Enable some in the module menu first.";
+        ctx.drawText(tr, RkbUi.fit(tr, hint, reset.x() - header.x() - 24), header.x() + 12,
+                header.y() + 23, RkbUi.MUTED, false);
+        RkbUi.button(ctx, tr, reset, "Reset positions", reset.contains(mx, my), false, true);
+        RkbUi.button(ctx, tr, done, "Done", done.contains(mx, my), true, true);
+        hits.add(new Hit(reset, () -> {
+            for (HudModule h : hud) {
+                h.resetPosition();
+            }
+            ConfigManager.save();
+        }));
+        hits.add(new Hit(done, () -> {
+            ConfigManager.save();
+            RkbScreens.home();
+        }));
+
+        RkbChrome.draw(ctx, tr, chrome, mx, my, 3, (r, action) -> hits.add(new Hit(r, action)));
 
         boolean down = KeyUtil.isMouseDown(mc, GLFW.GLFW_MOUSE_BUTTON_LEFT);
         if (down && !mouseWasDown) {
-            if (inside(mx, my, startX, BTN_Y, doneW, BTN_H)) {
-                mouseWasDown = true;
-                ConfigManager.save();
-                mc.setScreen(new RkbMenuScreen());
-                return;
-            } else if (inside(mx, my, resetX, BTN_Y, resetW, BTN_H)) {
-                for (HudModule h : hud) {
-                    h.resetPosition();
-                }
-                ConfigManager.save();
-            } else {
-                for (int i = hud.size() - 1; i >= 0; i--) {
-                    HudModule h = hud.get(i);
-                    if (h.isEnabled() && h.boundsW() > 0
-                            && inside(mx, my, h.boundsX(), h.boundsY(), h.boundsW(), h.boundsH())) {
-                        dragging = h;
-                        grabX = mx - h.boundsX();
-                        grabY = my - h.boundsY();
-                        break;
-                    }
-                }
-            }
+            click(mx, my);
         } else if (down && dragging != null) {
             dragging.moveTo(mx - grabX, my - grabY, width, height);
         } else if (!down && mouseWasDown && dragging != null) {

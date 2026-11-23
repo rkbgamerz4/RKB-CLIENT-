@@ -24,9 +24,14 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
+import net.minecraft.client.model.Dilation;
+import net.minecraft.client.model.ModelData;
+import net.minecraft.client.model.TexturedModelData;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.DefaultSkinHelper;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.LivingEntity;
@@ -97,6 +102,9 @@ public class CosmeticsScreen extends Screen {
 
     private PreviewPlayer previewPlayer;
     private ClientWorld previewWorld;
+    private RkbLayout.TopBar chrome;
+    private PlayerEntityModel classicModel;
+    private PlayerEntityModel slimModel;
 
     public CosmeticsScreen() {
         super(Text.literal("RKB Cosmetics"));
@@ -108,7 +116,8 @@ public class CosmeticsScreen extends Screen {
     protected void init() {
         MinecraftClient mc = MinecraftClient.getInstance();
         TextRenderer tr = mc.textRenderer;
-        layout = CosmeticsLayout.of(width, height);
+        chrome = RkbLayout.topBar(width, height);
+        layout = CosmeticsLayout.of(width, height, chrome.contentTop() + 2);
 
         String oldPath = pathField == null ? "" : pathField.getText();
         String oldUrl = urlField == null ? "" : urlField.getText();
@@ -196,7 +205,7 @@ public class CosmeticsScreen extends Screen {
             }
         }
         if (input.isEscape()) {
-            MinecraftClient.getInstance().setScreen(new RkbMenuScreen());
+            RkbScreens.home();
             return true;
         }
         return super.keyPressed(input);
@@ -337,8 +346,8 @@ public class CosmeticsScreen extends Screen {
         TextRenderer tr = mc.textRenderer;
         int accent = Theme.accent();
 
-        ctx.fill(0, 0, width, height, 0xD0050814);
-        drawPanel(ctx, layout.panel(), Theme.PANEL, Theme.BORDER, accent);
+        RkbUi.background(ctx, width, height, System.currentTimeMillis());
+        drawPanel(ctx, layout.panel(), 0xE60E1422, RkbUi.LINE, accent);
         drawHeader(ctx, tr, accent, mx, my);
         drawTabs(ctx, tr, accent, mx, my);
 
@@ -365,51 +374,32 @@ public class CosmeticsScreen extends Screen {
         if (System.currentTimeMillis() < toastUntil) {
             drawToast(ctx, tr, accent);
         }
+        RkbChrome.draw(ctx, tr, chrome, mx, my, 5,
+                (r, action) -> hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), false, action)));
     }
 
     private void drawHeader(DrawContext ctx, TextRenderer tr, int accent, int mx, int my) {
         CosmeticsLayout.Rect h = layout.header();
-        int logo = Math.min(30, Math.max(22, h.height() - 14));
-        int lx = h.x() + 2;
-        int ly = h.y() + (h.height() - logo) / 2;
-        if (RkbLogo.ready()) {
-            RkbLogo.draw(ctx, lx, ly, logo);
-        } else {
-            ctx.fill(lx + 2, ly + 2, lx + logo - 2, ly + logo - 2, accent);
-            ctx.drawText(tr, "R", lx + logo / 3, ly + logo / 4, Theme.BLACK, true);
-        }
-
-        int textX = lx + logo + 10;
-        ctx.drawText(tr, Text.literal("RKB CLIENT").styled(s -> s.withBold(true)), textX, h.y() + 5, Theme.TEXT,
-                false);
+        ctx.drawText(tr, "Cosmetics", h.x(), h.y() + 5, RkbUi.TEXT, false);
         String player = PlayerIdentity.username();
         if (player.isEmpty()) {
             player = "Player";
         }
-        ctx.drawText(tr, "COSMETICS  ·  " + fit(tr, player, Math.max(60, h.width() / 3)), textX, h.y() + 19,
-                accent, false);
-
-        int closeW = 26;
-        int closeX = h.right() - closeW;
-        boolean closeHover = mx >= closeX && mx < h.right() && my >= h.y() + 2 && my < h.y() + 26;
-        drawPanel(ctx, new CosmeticsLayout.Rect(closeX, h.y() + 2, closeW, 24),
-                closeHover ? Theme.CARD_HOVER : Theme.CARD, Theme.BORDER, accent);
-        ctx.drawText(tr, "X", closeX + 9, h.y() + 9, Theme.TEXT, false);
-        hits.add(new Hit(closeX, h.y() + 2, h.right(), h.y() + 26, false,
-                () -> MinecraftClient.getInstance().setScreen(new RkbMenuScreen())));
+        ctx.drawText(tr, "3D skins and capes  ·  " + fit(tr, player, Math.max(60, h.width() / 3)),
+                h.x(), h.y() + 19, RkbUi.MUTED, false);
 
         String status = CloudService.statusText();
         int statusW = Math.min(220, Math.max(110, tr.getWidth(status) + 30));
-        int statusX = closeX - statusW - 8;
-        if (statusX > textX + 120) {
-            int sy = h.y() + 6;
-            drawPanel(ctx, new CosmeticsLayout.Rect(statusX, sy, statusW, 22), Theme.CARD, Theme.BORDER, accent);
-            int dot = CloudService.status() == CloudService.Status.CONNECTED ? 0xFF39D98A
-                    : CloudService.status() == CloudService.Status.ERROR ? 0xFFFF6B6B
-                    : PlayerIdentity.signedIn() ? 0xFFFFC857 : Theme.MUTED;
-            ctx.fill(statusX + 8, sy + 9, statusX + 12, sy + 13, dot);
-            ctx.drawText(tr, fit(tr, status, statusW - 22), statusX + 17, sy + 7,
-                    dot == 0xFF39D98A ? Theme.TEXT : Theme.MUTED, false);
+        int statusX = h.right() - statusW;
+        if (statusX > h.x() + 180) {
+            int sy = h.y() + 4;
+            RkbUi.panel(ctx, new RkbUi.Rect(statusX, sy, statusW, 22), RkbUi.SURFACE, RkbUi.LINE);
+            int dot = CloudService.status() == CloudService.Status.CONNECTED ? RkbUi.SUCCESS
+                    : CloudService.status() == CloudService.Status.ERROR ? RkbUi.DANGER
+                    : PlayerIdentity.signedIn() ? RkbUi.WARNING : RkbUi.MUTED;
+            RkbUi.statusDot(ctx, statusX + 8, sy + 9, dot);
+            ctx.drawText(tr, fit(tr, status, statusW - 24), statusX + 18, sy + 7,
+                    dot == RkbUi.SUCCESS ? RkbUi.TEXT : RkbUi.MUTED, false);
         }
     }
 
@@ -418,12 +408,8 @@ public class CosmeticsScreen extends Screen {
             CosmeticsLayout.Rect r = layout.tabRects().get(i);
             boolean active = i == tab;
             boolean hover = r.contains(mx, my);
-            int bg = active ? accent : hover ? Theme.CARD_HOVER : Theme.CARD;
-            drawPanel(ctx, r, bg, active ? accent : Theme.BORDER, accent);
-            int color = active ? Theme.BLACK : hover ? Theme.TEXT : Theme.MUTED;
-            String label = CosmeticsLayout.TABS[i].toUpperCase(Locale.ROOT);
-            ctx.drawText(tr, label, r.x() + (r.width() - tr.getWidth(label)) / 2,
-                    r.y() + (r.height() - 9) / 2, color, false);
+            RkbUi.chip(ctx, new RkbUi.Rect(r.x(), r.y(), r.width(), r.height()),
+                    CosmeticsLayout.TABS[i], tr, active, hover);
             final int picked = i;
             hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), false, () -> setTab(picked)));
         }
@@ -431,9 +417,13 @@ public class CosmeticsScreen extends Screen {
 
     private void drawPreview(DrawContext ctx, TextRenderer tr, int accent, int mx, int my, float delta) {
         CosmeticsLayout.Rect box = layout.preview();
+        if (box.width() <= 0 || box.height() <= 0) {
+            return;
+        }
         ctx.fillGradient(box.x(), box.y(), box.right(), box.bottom(), 0xFF111B30, 0xFF0A0F1D);
         softOutline(ctx, box, Theme.BORDER);
-        ctx.fill(box.x() + 10, box.y() + 10, box.x() + 46, box.y() + 12, accent);
+        boolean tiny = box.height() < 150;
+        ctx.fill(box.x() + 10, box.y() + (tiny ? 2 : 10), box.x() + 46, box.y() + (tiny ? 3 : 12), accent);
 
         SkinSelection selection = selectedSkin();
         CosmeticsManager.Item cape = tab == TAB_CAPE ? selectedCapeItem() : CosmeticsManager.equippedItem("cape");
@@ -441,42 +431,64 @@ public class CosmeticsScreen extends Screen {
         String modelToggle = customSkin
                 ? (skinModelLabel(selection.model()).startsWith("Slim") ? "Classic" : "Slim")
                 : "";
-        int buttonY = box.bottom() - 30;
+        int buttonY = box.bottom() - (tiny ? 24 : 30);
         boolean wrapModel = false;
-        if (customSkin) {
+        if (customSkin && !tiny) {
             int applyW = actionButtonWidth(tr, "Apply Skin");
             int resetW = actionButtonWidth(tr, "Reset to Default");
             int modelW = actionButtonWidth(tr, modelToggle);
             wrapModel = box.right() - 8 - applyW - 6 - resetW - 6 - modelW < box.x() + 8;
         }
-        int infoBottom = box.bottom() - (wrapModel ? 78 : customSkin ? 56 : 52);
-        int drawBottom = Math.max(box.y() + 72, infoBottom - 36);
-        drawPlayerModel(ctx, new CosmeticsLayout.Rect(box.x() + 6, box.y() + 18, box.width() - 12,
-                drawBottom - box.y() - 18), selection, cape, tab == TAB_CAPE ? 0f : 180f, mx, my, delta);
+        int topPad = tiny ? 6 : 18;
+        int infoBottom = tiny ? buttonY - 4 : box.bottom() - (wrapModel ? 78 : customSkin ? 56 : 52);
+        int drawBottom = tiny ? Math.max(box.y() + topPad + 12, infoBottom)
+                : Math.max(box.y() + 72, infoBottom - 36);
+        int modelH = Math.max(8, drawBottom - box.y() - topPad);
+        drawPlayerModel(ctx, new CosmeticsLayout.Rect(box.x() + 6, box.y() + topPad, box.width() - 12,
+                modelH), selection, cape, tab == TAB_CAPE ? 0f : 180f, mx, my, delta);
 
-        String skinLabel = selection.custom() ? selection.name() : "Minecraft default skin";
-        String modelLabel = selection.custom() ? skinModelLabel(selection.model()) : "Vanilla Steve/Alex texture";
-        String capeLabel = cape == null ? "No cape" : cape.name() + (CosmeticsManager.isEquipped(cape.id()) ? "  ·  equipped" : "");
-        int labelY = Math.max(drawBottom + 2, infoBottom - 28);
-        ctx.drawText(tr, fit(tr, skinLabel, box.width() - 20), box.x() + 10, labelY, Theme.TEXT, false);
-        ctx.drawText(tr, fit(tr, modelLabel, box.width() - 20), box.x() + 10, labelY + 12, Theme.MUTED, false);
-        ctx.drawText(tr, fit(tr, capeLabel, box.width() - 20), box.x() + 10, labelY + 24,
-                cape != null && CosmeticsManager.isEquipped(cape.id()) ? accent : Theme.MUTED, false);
+        if (!tiny) {
+            String skinLabel = selection.custom() ? selection.name() : "Minecraft default skin";
+            String modelLabel = selection.custom() ? skinModelLabel(selection.model())
+                    : "Vanilla Steve/Alex texture";
+            String capeLabel = cape == null ? "No cape"
+                    : cape.name() + (CosmeticsManager.isEquipped(cape.id()) ? "  ·  equipped" : "");
+            int labelY = Math.max(drawBottom + 2, infoBottom - 28);
+            ctx.drawText(tr, fit(tr, skinLabel, box.width() - 20), box.x() + 10, labelY, Theme.TEXT, false);
+            ctx.drawText(tr, fit(tr, modelLabel, box.width() - 20), box.x() + 10, labelY + 12, Theme.MUTED,
+                    false);
+            ctx.drawText(tr, fit(tr, capeLabel, box.width() - 20), box.x() + 10, labelY + 24,
+                    cape != null && CosmeticsManager.isEquipped(cape.id()) ? accent : Theme.MUTED, false);
+        } else if (customSkin) {
+            if (box.height() >= 90) {
+                ctx.drawText(tr, modelToggle + " model", box.x() + 6, box.y() + 4, RkbUi.MUTED, false);
+            }
+            // On very short screens the model itself becomes the Classic/Slim switch.
+            hits.add(new Hit(box.x() + 4, box.y() + 4, box.right() - 4, buttonY - 2, false, () -> {
+                String next = skinModelLabel(selection.model()).startsWith("Slim")
+                        ? SkinRules.MODEL_CLASSIC : SkinRules.MODEL_SLIM;
+                SkinSetStore.setModel(selectedSkinId, next);
+                showToast("Skin model: " + SkinRules.label(next));
+            }));
+        }
 
         if (tab == TAB_SKIN) {
+            String applyLabel = tiny ? "Apply" : "Apply Skin";
+            String resetLabel = tiny ? "Reset" : "Reset to Default";
             int right = box.right() - 8;
-            int applyX = actionButton(ctx, tr, "Apply Skin", right, buttonY, selection.custom(), true, selection.custom() ? () -> {
-                SkinSetStore.activate(selectedSkinId);
-                SkinSetStore.saveAndApply();
-                showToast("Skin applied locally.");
-            } : null);
-            int resetX = actionButton(ctx, tr, "Reset to Default", applyX - 6, buttonY,
+            int applyX = actionButton(ctx, tr, applyLabel, right, buttonY, selection.custom(), true,
+                    selection.custom() ? () -> {
+                        SkinSetStore.activate(selectedSkinId);
+                        SkinSetStore.saveAndApply();
+                        showToast("Skin applied locally.");
+                    } : null);
+            int resetX = actionButton(ctx, tr, resetLabel, applyX - 6, buttonY,
                     SkinSetStore.activeSet() != null, false, () -> {
                         SkinSetStore.deactivate();
                         selectedSkinId = "";
                         showToast("Minecraft default skin restored.");
                     });
-            if (customSkin) {
+            if (customSkin && !tiny) {
                 int modelY = wrapModel ? buttonY - 24 : buttonY;
                 int modelRight = wrapModel ? box.right() - 8 : resetX - 6;
                 actionButton(ctx, tr, modelToggle, modelRight, modelY, true, false, () -> {
@@ -488,11 +500,12 @@ public class CosmeticsScreen extends Screen {
             }
         } else if (tab == TAB_CAPE) {
             boolean equipped = cape != null && CosmeticsManager.isEquipped(cape.id());
-            actionButton(ctx, tr, "Remove Cape", box.right() - 8, buttonY,
+            String removeLabel = tiny ? "Unequip" : "Remove Cape";
+            actionButton(ctx, tr, removeLabel, box.right() - 8, buttonY,
                     CosmeticsManager.equippedItem("cape") != null, false,
                     () -> CosmeticsManager.unequip("cape"));
-            actionButton(ctx, tr, equipped ? "Equipped" : "Apply Cape",
-                    box.right() - 8 - actionButtonWidth(tr, "Remove Cape") - 22, buttonY,
+            actionButton(ctx, tr, equipped ? "Equipped" : tiny ? "Equip" : "Apply Cape",
+                    box.right() - 8 - actionButtonWidth(tr, removeLabel) - (tiny ? 6 : 22), buttonY,
                     cape != null && cape.usable() && !equipped, true,
                     () -> {
                         CosmeticsManager.equip(cape.id());
@@ -500,7 +513,7 @@ public class CosmeticsScreen extends Screen {
                     });
         } else {
             ctx.drawText(tr, fit(tr, "Live V2 inventory · " + CloudService.statusText(), box.width() - 20),
-                    box.x() + 10, buttonY + 5, Theme.MUTED, false);
+                    box.x() + 10, tiny ? box.y() + 4 : buttonY + 5, Theme.MUTED, false);
         }
     }
 
@@ -518,8 +531,8 @@ public class CosmeticsScreen extends Screen {
 
         List<SkinSetStore.SkinSet> sets = SkinSetStore.state().sets();
         if (sets.isEmpty()) {
-            ctx.drawText(tr, "No saved skins yet. Upload a PNG or import an image URL below.", r.x() + 8, y + 8,
-                    Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, "No saved skins yet. Upload a PNG or import an image URL below.",
+                    r.width() - 16), r.x() + 8, y + 8, Theme.MUTED, false);
             y += 30;
         } else {
             for (SkinSetStore.SkinSet set : sets) {
@@ -588,24 +601,29 @@ public class CosmeticsScreen extends Screen {
     }
 
     private int drawAddSkinCard(DrawContext ctx, TextRenderer tr, int accent, CosmeticsLayout.Rect r, int y) {
-        CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, 76);
+        boolean narrow = r.width() < 320;
+        int cardH = input == Input.NONE ? 76 : 96;
+        CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, cardH);
         drawPanel(ctx, card, Theme.CARD_INNER, Theme.BORDER, accent);
         ctx.drawText(tr, "ADD A SKIN", card.x() + 10, card.y() + 8, accent, false);
-        ctx.drawText(tr, "PNG, 64x64 or 64x32 · at most 256 KB · stored locally", card.x() + 10, card.y() + 21,
-                Theme.MUTED, false);
+        ctx.drawText(tr, fit(tr, "PNG, 64x64 or 64x32 · at most 256 KB · stored locally", card.width() - 20),
+                card.x() + 10, card.y() + 21, Theme.MUTED, false);
 
+        String upload = narrow ? "Upload" : "Upload PNG";
+        String url = narrow ? "URL" : "Import URL";
+        String scan = narrow ? "Inbox" : "Scan inbox";
         int by = card.y() + 38;
         int right = card.right() - 9;
-        actionButton(ctx, tr, "Import URL", right, by, true, false, () -> {
+        actionButton(ctx, tr, url, right, by, true, false, () -> {
             input = input == Input.URL ? Input.NONE : Input.URL;
             listScroll = 0;
         });
-        actionButton(ctx, tr, "Upload PNG", right - actionButtonWidth(tr, "Import URL") - 5, by, true, false, () -> {
+        actionButton(ctx, tr, upload, right - actionButtonWidth(tr, url) - 5, by, true, false, () -> {
             input = input == Input.PATH ? Input.NONE : Input.PATH;
             listScroll = 0;
         });
-        actionButton(ctx, tr, "Scan inbox", right - actionButtonWidth(tr, "Upload PNG") - actionButtonWidth(tr, "Import URL") - 10,
-                by, true, false, () -> {
+        actionButton(ctx, tr, scan,
+                right - actionButtonWidth(tr, upload) - actionButtonWidth(tr, url) - 10, by, true, false, () -> {
                     SkinSetStore.scanInbox();
                     showToast("Checking the local inbox folder...");
                 });
@@ -631,8 +649,8 @@ public class CosmeticsScreen extends Screen {
             });
         }
         if (input != Input.NONE) {
-            ctx.drawText(tr, "Local only · nothing is uploaded to Supabase", card.x() + 10, card.bottom() - 12,
-                    Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, "Local only · nothing is uploaded to Supabase", card.width() - 20),
+                    card.x() + 10, card.bottom() - 12, Theme.MUTED, false);
         }
         return card.bottom() + 8;
     }
@@ -655,8 +673,8 @@ public class CosmeticsScreen extends Screen {
                 .toList());
 
         if (all.isEmpty()) {
-            ctx.drawText(tr, "The catalog has not loaded yet. Local bundled designs remain unavailable until V2 "
-                    + "confirms ownership.", r.x() + 8, y + 8, Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, "The catalog has not loaded yet. Local bundled designs remain unavailable "
+                    + "until V2 confirms ownership.", r.width() - 16), r.x() + 8, y + 8, Theme.MUTED, false);
             y += 34;
         }
         listTotal = y - r.y() + 10;
@@ -681,22 +699,27 @@ public class CosmeticsScreen extends Screen {
             }
 
             Identifier tex = CapeTextures.texture(item.id(), item.assetSha());
+            boolean narrow = row.width() < 300;
             int tx = row.x() + 8;
             int ty = row.y() + 10;
-            if (tex != null) {
-                drawScaledTexture(ctx, tex, tx, ty, 1f, 1f, 6, 4, 64, 32, 1.5f);
-            } else {
-                ctx.fill(tx, ty, tx + 28, ty + 18, Theme.CARD_INNER);
+            if (!narrow) {
+                if (tex != null) {
+                    drawScaledTexture(ctx, tex, tx, ty, 1f, 1f, 6, 4, 64, 32, 1.5f);
+                } else {
+                    ctx.fill(tx, ty, tx + 28, ty + 18, Theme.CARD_INNER);
+                }
             }
-            int textX = tx + 36;
+            int textX = narrow ? row.x() + 8 : tx + 36;
+            int textW = narrow ? Math.max(40, row.width() - 16 - (item.usable() ? 70 : 0))
+                    : row.width() - 150;
             String name = item.name().isEmpty() ? item.id() : item.name();
-            ctx.drawText(tr, fit(tr, name, row.width() - 150), textX, row.y() + 8, Theme.TEXT, false);
+            ctx.drawText(tr, fit(tr, name, textW), textX, row.y() + 8, Theme.TEXT, false);
             String status = equipped ? "EQUIPPED" : item.usable() ? "OWNED · READY"
                     : !item.active() ? "NOT IN CATALOG" : !item.assetReady() ? "ASSET UNAVAILABLE" : "NOT OWNED";
             int statusColor = equipped ? accent : item.usable() ? 0xFF39D98A : Theme.MUTED;
-            ctx.drawText(tr, status, textX, row.y() + 21, statusColor, false);
+            ctx.drawText(tr, fit(tr, status, textW), textX, row.y() + 21, statusColor, false);
             String detail = item.rarity().isEmpty() ? item.type() : item.rarity() + "  ·  " + item.type();
-            ctx.drawText(tr, fit(tr, detail, row.width() - 150), textX, row.y() + 34, Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, detail, textW), textX, row.y() + 34, Theme.MUTED, false);
 
             int right = row.right() - 7;
             if (item.usable()) {
@@ -727,6 +750,7 @@ public class CosmeticsScreen extends Screen {
         ctx.drawText(tr, "REDEEM", r.x() + 4, y, accent, false);
         y += 14;
 
+        boolean narrow = r.width() < 320;
         CosmeticsLayout.Rect card = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, 104);
         drawPanel(ctx, card, Theme.CARD, Theme.BORDER, accent);
         ctx.drawText(tr, "CODE", card.x() + 10, card.y() + 9, accent, false);
@@ -738,14 +762,15 @@ public class CosmeticsScreen extends Screen {
                     redeemField.setText("");
                     CosmeticsManager.redeem(code);
                 });
-        ctx.drawText(tr, busy ? "Contacting the authenticated V2 function..." : "Codes are accepted only while signed in and linked.",
+        ctx.drawText(tr, fit(tr, busy ? "Contacting the authenticated V2 function..."
+                        : "Codes are accepted only while signed in and linked.", card.width() - 20),
                 card.x() + 10, card.y() + 52, busy ? accent : Theme.MUTED, false);
         String message = CosmeticsManager.message();
         int resultColor = message.isEmpty() ? Theme.MUTED : CosmeticsManager.lastResultOk() ? 0xFF39D98A : 0xFFFF8B8B;
         ctx.drawText(tr, fit(tr, message.isEmpty() ? "No code submitted in this session." : message, card.width() - 20),
                 card.x() + 10, card.y() + 70, resultColor, false);
-        ctx.drawText(tr, "V2 has no redemption-history action; no history is shown.", card.x() + 10, card.y() + 86,
-                Theme.MUTED, false);
+        ctx.drawText(tr, fit(tr, "V2 has no redemption-history action; no history is shown.", card.width() - 20),
+                card.x() + 10, card.y() + 86, Theme.MUTED, false);
         y = card.bottom() + 10;
 
         CosmeticsLayout.Rect cloud = new CosmeticsLayout.Rect(r.x() + 2, y, r.width() - 6, 104);
@@ -760,15 +785,17 @@ public class CosmeticsScreen extends Screen {
         ctx.drawText(tr, fit(tr, account, cloud.width() / 2 - 16), cloud.x() + 10, cloud.y() + 38, Theme.MUTED, false);
         ctx.drawText(tr, fit(tr, linked, cloud.width() / 2 - 16), cloud.x() + cloud.width() / 2 + 6, cloud.y() + 38,
                 Theme.MUTED, false);
-        ctx.drawText(tr, "Last sync: " + (CloudStore.lastSyncMs() <= 0 ? "never" : ago(CloudStore.lastSyncMs())),
-                cloud.x() + 10, cloud.y() + 52, Theme.MUTED, false);
+        ctx.drawText(tr, fit(tr, "Last sync: " + (CloudStore.lastSyncMs() <= 0 ? "never" : ago(CloudStore.lastSyncMs())),
+                cloud.width() - 20), cloud.x() + 10, cloud.y() + 52, Theme.MUTED, false);
+        String syncLabel = narrow ? "Sync" : "Sync now";
+        String linkLabel = narrow ? "Link" : "Link Minecraft";
         int by = cloud.y() + 72;
-        actionButton(ctx, tr, "Sync now", cloud.right() - 10, by, CosmeticsManager.ready(), true,
+        actionButton(ctx, tr, syncLabel, cloud.right() - 10, by, CosmeticsManager.ready(), true,
                 CloudService::manualSync);
-        actionButton(ctx, tr, "Link Minecraft", cloud.right() - 10 - actionButtonWidth(tr, "Sync now") - 5, by,
+        actionButton(ctx, tr, linkLabel, cloud.right() - 10 - actionButtonWidth(tr, syncLabel) - 5, by,
                 CosmeticsManager.ready(), false, CloudService::link);
-        actionButton(ctx, tr, "Refresh", cloud.right() - 10 - actionButtonWidth(tr, "Sync now")
-                - actionButtonWidth(tr, "Link Minecraft") - 10, by, CosmeticsManager.ready(), false,
+        actionButton(ctx, tr, "Refresh", cloud.right() - 10 - actionButtonWidth(tr, syncLabel)
+                - actionButtonWidth(tr, linkLabel) - 10, by, CosmeticsManager.ready(), false,
                 CosmeticsManager::refresh);
         y = cloud.bottom() + 10;
 
@@ -781,8 +808,8 @@ public class CosmeticsScreen extends Screen {
         ctx.drawText(tr, "OWNED ITEMS  ·  " + owned.size(), r.x() + 4, y, accent, false);
         y += 14;
         if (owned.isEmpty()) {
-            ctx.drawText(tr, "No V2 inventory is loaded. Local skins and bundled cape textures still work.",
-                    r.x() + 8, y + 4, Theme.MUTED, false);
+            ctx.drawText(tr, fit(tr, "No V2 inventory is loaded. Local skins and bundled cape textures still work.",
+                    r.width() - 16), r.x() + 8, y + 4, Theme.MUTED, false);
             y += 24;
         } else {
             for (CosmeticsManager.Item item : owned) {
@@ -807,14 +834,15 @@ public class CosmeticsScreen extends Screen {
     private void drawPlayerModel(DrawContext ctx, CosmeticsLayout.Rect box, SkinSelection selection,
                                  CosmeticsManager.Item cape, float baseYaw, int mx, int my, float delta) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        Identifier capeTex = cape == null || !cape.usable() ? null : CapeTextures.texture(cape.id(), cape.assetSha());
+        SkinTextures textures = previewTextures(selection, capeTex);
         if (mc.world == null) {
-            ctx.drawText(mc.textRenderer, "3D preview is available from the in-game menu.", box.x() + 10,
-                    box.y() + 10, Theme.MUTED, false);
+            // The world-free title screen cannot build a ClientWorld, so use Minecraft's own GUI player-skin
+            // renderer. It renders the same real model and texture, just without world lighting.
+            drawGuiPlayerSkin(ctx, box, textures);
             return;
         }
 
-        Identifier capeTex = cape == null || !cape.usable() ? null : CapeTextures.texture(cape.id(), cape.assetSha());
-        SkinTextures textures = previewTextures(selection, capeTex);
         LivingEntity entity = previewEntity(mc, textures);
         EntityRenderState state = mc.getEntityRenderDispatcher().getAndUpdateRenderState(entity, delta);
         state.light = 0xF000F0;
@@ -841,6 +869,48 @@ public class CosmeticsScreen extends Screen {
         Vector3f center = new Vector3f(0f, state.height / 2f, 0f);
         int size = Math.max(24, Math.min(box.width() * 3 / 10, box.height() / 3));
         ctx.addEntity(state, size, center, body, rotation, box.x() + 4, box.y() + 4, box.right() - 4, box.bottom());
+    }
+
+    private void drawGuiPlayerSkin(DrawContext ctx, CosmeticsLayout.Rect box, SkinTextures textures) {
+        if (box.width() <= 12 || box.height() <= 8) {
+            return;
+        }
+        boolean slim = textures.model() == PlayerSkinType.SLIM;
+        PlayerEntityModel model = model(slim);
+        PlayerEntityRenderState state = new PlayerEntityRenderState();
+        state.bodyYaw = 180f;
+        state.relativeHeadYaw = 0f;
+        state.pitch = 0f;
+        state.hatVisible = true;
+        state.jacketVisible = true;
+        state.leftSleeveVisible = true;
+        state.rightSleeveVisible = true;
+        state.leftPantsLegVisible = true;
+        state.rightPantsLegVisible = true;
+        model.setVisible(true);
+        model.setAngles(state);
+        int pad = Math.max(2, Math.min(10, box.height() / 6));
+        int bottomPad = Math.max(2, Math.min(34, box.height() / 3));
+        ctx.addPlayerSkin(model, textures.body().texturePath(), 1f, 0f, 180f, 0f,
+                box.x() + 6, box.y() + pad, box.right() - 6, box.bottom() - bottomPad);
+    }
+
+    private PlayerEntityModel model(boolean slim) {
+        if (slim) {
+            if (slimModel == null) {
+                slimModel = buildModel(true);
+            }
+            return slimModel;
+        }
+        if (classicModel == null) {
+            classicModel = buildModel(false);
+        }
+        return classicModel;
+    }
+
+    private static PlayerEntityModel buildModel(boolean slim) {
+        ModelData data = PlayerEntityModel.getTexturedModelData(Dilation.NONE, slim);
+        return new PlayerEntityModel(TexturedModelData.of(data, 64, 64).createModel(), slim);
     }
 
     private SkinTextures previewTextures(SkinSelection selection, Identifier capeTex) {
@@ -925,14 +995,15 @@ public class CosmeticsScreen extends Screen {
     private void positionFields() {
         CosmeticsLayout.Rect r = layout.list();
         int fieldW = Math.max(80, r.width() - 20);
-        positionField(pathField, tab == TAB_SKIN && input == Input.PATH, r.x() + 72, pathFieldY,
-                Math.max(60, fieldW - 168), r);
-        positionField(urlField, tab == TAB_SKIN && input == Input.URL, r.x() + 66, urlFieldY,
-                Math.max(60, fieldW - 162), r);
+        boolean narrow = r.width() < 240;
+        positionField(pathField, tab == TAB_SKIN && input == Input.PATH, narrow ? r.x() + 10 : r.x() + 72,
+                pathFieldY, narrow ? Math.max(50, r.width() - 70) : Math.max(60, fieldW - 168), r);
+        positionField(urlField, tab == TAB_SKIN && input == Input.URL, narrow ? r.x() + 10 : r.x() + 66,
+                urlFieldY, narrow ? Math.max(50, r.width() - 70) : Math.max(60, fieldW - 162), r);
         positionField(renameField, tab == TAB_SKIN && !renamingId.isEmpty(), r.x() + 10, renameFieldY,
-                Math.max(50, fieldW - 96), r);
+                narrow ? Math.max(50, r.width() - 20) : Math.max(50, fieldW - 96), r);
         positionField(redeemField, tab == TAB_REDEEM, r.x() + 10, redeemFieldY,
-                Math.max(60, fieldW - 96), r);
+                Math.max(50, r.width() - 70), r);
     }
 
     private static void positionField(TextFieldWidget field, boolean show, int x, int y, int w, CosmeticsLayout.Rect list) {
@@ -961,40 +1032,27 @@ public class CosmeticsScreen extends Screen {
         if (r.width() <= 0 || r.height() <= 0) {
             return;
         }
-        ctx.fill(r.x() + 2, r.y(), r.right() - 2, r.bottom(), bg);
-        ctx.fill(r.x(), r.y() + 2, r.right(), r.bottom() - 2, bg);
-        ctx.fill(r.x() + 1, r.y() + 1, r.right() - 1, r.bottom() - 1, bg);
-        ctx.fill(r.x() + 4, r.y(), r.right() - 4, r.y() + 1, border);
-        ctx.fill(r.x() + 4, r.bottom() - 1, r.right() - 4, r.bottom(), border);
-        ctx.fill(r.x(), r.y() + 4, r.x() + 1, r.bottom() - 4, border);
-        ctx.fill(r.right() - 1, r.y() + 4, r.right(), r.bottom() - 4, border);
+        RkbUi.panel(ctx, new RkbUi.Rect(r.x(), r.y(), r.width(), r.height()), bg, border);
     }
 
     private static void softOutline(DrawContext ctx, CosmeticsLayout.Rect r, int color) {
-        ctx.fill(r.x(), r.y() + 3, r.x() + 1, r.bottom() - 3, color);
-        ctx.fill(r.right() - 1, r.y() + 3, r.right(), r.bottom() - 3, color);
-        ctx.fill(r.x() + 3, r.y(), r.right() - 3, r.y() + 1, color);
-        ctx.fill(r.x() + 3, r.bottom() - 1, r.right() - 3, r.bottom(), color);
+        RkbUi.roundedOutline(ctx, new RkbUi.Rect(r.x(), r.y(), r.width(), r.height()), color);
     }
 
     private int actionButton(DrawContext ctx, TextRenderer tr, String label, int right, int y, boolean enabled,
                              boolean primary, Runnable action) {
         int w = actionButtonWidth(tr, label);
         int x = right - w;
-        int h = 20;
-        int bg = !enabled ? Theme.CARD_INNER : primary ? Theme.accent() : Theme.BORDER;
-        drawPanel(ctx, new CosmeticsLayout.Rect(x, y, w, h), bg, enabled ? Theme.BORDER : Theme.CARD_INNER,
-                Theme.accent());
-        ctx.drawText(tr, label, x + (w - tr.getWidth(label)) / 2, y + 6,
-                !enabled ? Theme.OFF : primary ? Theme.BLACK : Theme.TEXT, false);
+        RkbUi.Rect r = new RkbUi.Rect(x, y, w, 20);
+        RkbUi.button(ctx, tr, r, label, false, primary, enabled);
         if (enabled && action != null) {
-            hits.add(new Hit(x, y, x + w, y + h, false, action));
+            hits.add(new Hit(r.x(), r.y(), r.right(), r.bottom(), false, action));
         }
         return x;
     }
 
     private static int actionButtonWidth(TextRenderer tr, String label) {
-        return Math.max(52, tr.getWidth(label) + 16);
+        return Math.max(46, tr.getWidth(label) + 16);
     }
 
     private void drawScaledTexture(DrawContext ctx, Identifier id, int x, int y, float u, float v, int w, int h,

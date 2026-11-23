@@ -14,7 +14,7 @@ import java.util.List;
 /** Global interface settings. Its keybind is the key that opens the menu (default Right Shift). */
 public class InterfaceModule extends Module {
     private static final List<String> HUD_COLORS = List.of("White", "Cyan", "Blue", "Gray", "Green");
-    private static final int[] HUD_COLOR_VALUES = {0xFFFFFFFF, 0xFF00A8FF, 0xFF1B60FF, 0xFF8FA3BF, 0xFF55FF7F};
+    private static final int[] HUD_COLOR_VALUES = {0xFFFFFFFF, 0xFF00A8FF, 0xFF246BFF, 0xFF96A8BE, 0xFF55FF7F};
 
     private final ChoiceSetting accent = add(new ChoiceSetting("accent", "Accent color", List.of("Cyan", "Blue"), "Cyan"));
     private final ChoiceSetting hudColor = add(new ChoiceSetting("hud_color", "HUD text color", HUD_COLORS, "White"));
@@ -46,7 +46,7 @@ public class InterfaceModule extends Module {
     }
 
     public int accent() {
-        return accent.index() == 1 ? 0xFF1B60FF : 0xFF00A8FF;
+        return accent.index() == 1 ? 0xFF246BFF : 0xFF00A8FF;
     }
 
     public int hudTextColor() {
