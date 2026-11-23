@@ -60,7 +60,17 @@ public final class CapeTextures {
     /** The cape the player has equipped, or null when it is not loaded yet / there is none. */
     public static Identifier textureOf(UUID player) {
         RemoteCosmetics.Look look = RemoteCosmetics.lookOf(player);
-        return look == null || look.capeSha() == null ? null : bySha.get(look.capeSha());
+        if (look != null && look.capeSha() != null) {
+            return bySha.get(look.capeSha());
+        }
+        // Offline/self fallback: use the cached equipped cape from the local inventory cache.
+        if (RemoteCosmetics.isSelf(player)) {
+            CosmeticsManager.Item cape = CosmeticsManager.equippedItem("cape");
+            if (cape != null && cape.usable()) {
+                return texture(cape.id(), cape.assetSha());
+            }
+        }
+        return null;
     }
 
     /** Starts a download only for a backend-supplied path; bundled capes use the shipped PNG. */

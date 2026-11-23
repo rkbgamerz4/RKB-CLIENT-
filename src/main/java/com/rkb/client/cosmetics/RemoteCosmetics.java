@@ -96,6 +96,8 @@ public final class RemoteCosmetics {
             PlayerTextures.clearResults();
             if (now == null) {
                 clearRemote();
+            } else {
+                CosmeticsManager.ensureOfflineLook();
             }
         }
     }

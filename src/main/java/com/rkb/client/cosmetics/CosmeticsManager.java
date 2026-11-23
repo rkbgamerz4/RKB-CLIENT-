@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 
 /**
@@ -60,6 +61,10 @@ public final class CosmeticsManager {
     private static volatile String message = "";
     private static volatile boolean lastResultOk;
     private static String diskTriedFor = "";
+    /** Last backend-confirmed catalog/inventory cached on this device, kept for offline use. */
+    private static State offlineCache;
+    private static String offlineAccountId = "";
+    private static boolean offlineTried;
 
     private CosmeticsManager() {
     }
@@ -73,12 +78,43 @@ public final class CosmeticsManager {
     /** Never returns expired remote data. Local skins and bundled cape textures are independent of this cache. */
     public static State state() {
         String user = CloudStore.userId();
+        if (user.isEmpty()) {
+            // Signed out: use the last backend-confirmed cache for this device, never a fresh grant.
+            return offlineCached();
+        }
         State s = CACHE.get(user);
-        if (s == null && !user.isEmpty() && !user.equals(diskTriedFor)) {
+        if (s == null && !user.equals(diskTriedFor)) {
             diskTriedFor = user;
             s = loadDisk(user);
         }
         return s == null || stale(s) ? EMPTY : s;
+    }
+
+    private static State offlineCached() {
+        if (!offlineTried) {
+            offlineTried = true;
+            State s = loadDisk("");
+            if (s != null) {
+                UUID mine = PlayerIdentity.uuid();
+                boolean sameMinecraft = s.rkbId().isEmpty() || (mine != null && s.rkbId().equalsIgnoreCase(mine.toString()));
+                if (sameMinecraft) {
+                    offlineCache = s;
+                }
+            }
+        }
+        return offlineCache == null ? EMPTY : offlineCache;
+    }
+
+    /** Re-applies the cached equipped look when signed out so capes keep rendering offline. */
+    public static void ensureOfflineLook() {
+        if (ready()) {
+            return;
+        }
+        State st = state();
+        if (st == EMPTY || st.equipped().isEmpty()) {
+            return;
+        }
+        MinecraftClient.getInstance().execute(() -> RemoteCosmetics.setSelf(ownLook(st)));
     }
 
     public static boolean stale() {
@@ -116,6 +152,8 @@ public final class CosmeticsManager {
     public static void onAccountChanged() {
         CACHE.clear();
         diskTriedFor = "";
+        offlineCache = null;
+        offlineTried = false;
         RemoteCosmetics.setSelf(null);
         version++;
         refresh();
@@ -126,13 +164,11 @@ public final class CosmeticsManager {
     public static void onSignedOut() {
         CACHE.clear();
         diskTriedFor = "";
+        offlineCache = null;
+        offlineTried = false;
         message = "";
         RemoteCosmetics.setSelf(null);
-        try {
-            Files.deleteIfExists(file());
-        } catch (IOException e) {
-            RkbClient.LOGGER.warn("Could not delete the cosmetics cache: {}", e.toString());
-        }
+        // Keep the last backend-confirmed cache on disk: offline mode may equip only that cached ownership.
         SkinSetStore.onAccountChanged();
         version++;
     }
@@ -214,13 +250,66 @@ public final class CosmeticsManager {
     }
 
     public static void equip(String cosmeticId) {
+        if (!ready()) {
+            equipOffline(cosmeticId);
+            return;
+        }
         act(CosmeticsV2Api.request(CosmeticsV2Api.EQUIP, "cosmetic_id", cosmeticId),
                 r -> "Equipped " + cosmeticId + ".");
     }
 
     public static void unequip(String slot) {
+        if (!ready()) {
+            unequipOffline(slot);
+            return;
+        }
         act(CosmeticsV2Api.request(CosmeticsV2Api.UNEQUIP, "slot", normalizeSlot(slot)),
                 r -> "Unequipped your " + normalizeSlot(slot) + ".");
+    }
+
+    /** Offline: only previously confirmed, locally cached ownership may be equipped. */
+    private static void equipOffline(String cosmeticId) {
+        State st = state();
+        Item item = find(st, cosmeticId);
+        if (item == null || !item.usable()) {
+            say("Sign in to use cloud cosmetics. Only previously confirmed cached ownership works offline.", true);
+            return;
+        }
+        String slot = normalizeSlot(item.type());
+        if (!compatible(slot, item.type())) {
+            say("That cosmetic cannot be equipped in that slot.", true);
+            return;
+        }
+        Map<String, String> equipped = new LinkedHashMap<>(st.equipped());
+        equipped.put(slot, item.id());
+        State updated = new State(st.rkbId(), st.items(), Map.copyOf(equipped), st.history(), st.fetchedMs());
+        offlineCache = updated;
+        if (!offlineAccountId.isEmpty()) {
+            saveDisk(offlineAccountId, updated);
+        }
+        version++;
+        PlayerTextures.clearResults();
+        MinecraftClient.getInstance().execute(() -> RemoteCosmetics.setSelf(ownLook(updated)));
+        say("Equipped " + item.name() + " from your cached inventory (offline).", false);
+    }
+
+    private static void unequipOffline(String slot) {
+        State st = state();
+        String norm = normalizeSlot(slot);
+        if (!st.equipped().containsKey(norm)) {
+            return;
+        }
+        Map<String, String> equipped = new LinkedHashMap<>(st.equipped());
+        equipped.remove(norm);
+        State updated = new State(st.rkbId(), st.items(), Map.copyOf(equipped), st.history(), st.fetchedMs());
+        offlineCache = updated;
+        if (!offlineAccountId.isEmpty()) {
+            saveDisk(offlineAccountId, updated);
+        }
+        version++;
+        PlayerTextures.clearResults();
+        MinecraftClient.getInstance().execute(() -> RemoteCosmetics.setSelf(ownLook(updated)));
+        say("Unequipped your " + norm + " (offline).", false);
     }
 
     /** V2 does not expose claim/purchase_start. Kept only so old callers get a truthful answer. */
@@ -452,7 +541,8 @@ public final class CosmeticsManager {
         }
         try {
             JsonObject root = JsonParser.parseString(Files.readString(f, StandardCharsets.UTF_8)).getAsJsonObject();
-            if (!accountId.equals(str(root, "accountId"))) {
+            String storedAccount = str(root, "accountId");
+            if (!accountId.isEmpty() && !accountId.equals(storedAccount)) {
                 return null;   // the cache belongs to another account: ignore it
             }
             Set<String> owned = new LinkedHashSet<>();
@@ -493,7 +583,11 @@ public final class CosmeticsManager {
             }
             State st = new State(str(root, "rkbId"), List.copyOf(items), Map.copyOf(equipped), List.of(),
                     num(root, "fetchedMs"));
-            CACHE.put(accountId, st);
+            String key = storedAccount.isEmpty() ? accountId : storedAccount;
+            CACHE.put(key, st);
+            if (accountId.isEmpty()) {
+                offlineAccountId = key;
+            }
             return st;
         } catch (Exception e) {
             RkbClient.LOGGER.warn("Cosmetics cache is unreadable ({}).", e.toString());
