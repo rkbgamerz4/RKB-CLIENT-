@@ -17,6 +17,10 @@ import java.util.function.Consumer;
 /** Base class for every RKB CLIENT module. */
 public abstract class Module {
     private static final int MAX_FAILURES = 3;
+    /** Diagnostic thresholds (ns). Only log when exceeded to avoid spam. */
+    private static final long TICK_WARN_NS = 5_000_000L;   // 5 ms
+    private static final long RENDER_WARN_NS = 8_000_000L; // 8 ms
+    private static final long WARN_COOLDOWN_MS = 5_000L;
 
     private final String id;
     private final String name;
@@ -35,6 +39,8 @@ public abstract class Module {
     private KeyBinding binding;
     private boolean keyPinned;
     private int failures;
+    private long lastTickWarnMs;
+    private long lastRenderWarnMs;
 
     protected Module(String id, String name, String description, Category category) {
         this.id = id;
@@ -214,10 +220,15 @@ public abstract class Module {
 
     private void runEnableHook() {
         active = true;
+        long t0 = System.nanoTime();
         try {
             onEnable();
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            RkbClient.LOGGER.info("[RKB-DIAG] module={} stage=enable durationMs={} enabled=true", id, ms);
         } catch (Throwable t) {
-            RkbClient.LOGGER.error("Module '{}' failed to enable; disabling it.", id, t);
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            RkbClient.LOGGER.error("[RKB-DIAG] module={} stage=enable durationMs={} ts={} failed; disabling it.",
+                    id, ms, System.currentTimeMillis(), t);
             enabled = false;
             active = false;
         }
@@ -225,10 +236,15 @@ public abstract class Module {
 
     private void runDisableHook() {
         active = false;
+        long t0 = System.nanoTime();
         try {
             onDisable();
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            RkbClient.LOGGER.info("[RKB-DIAG] module={} stage=disable durationMs={} enabled=false", id, ms);
         } catch (Throwable t) {
-            RkbClient.LOGGER.error("Module '{}' failed to disable cleanly.", id, t);
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            RkbClient.LOGGER.error("[RKB-DIAG] module={} stage=disable durationMs={} ts={} failed cleanly.",
+                    id, ms, System.currentTimeMillis(), t);
         }
     }
 
@@ -243,10 +259,21 @@ public abstract class Module {
         if (!enabled || !active) {
             return;
         }
+        long t0 = System.nanoTime();
         try {
             onTick(mc);
         } catch (Throwable t) {
             handleFailure("tick", t);
+            return;
+        }
+        long ns = System.nanoTime() - t0;
+        if (ns >= TICK_WARN_NS) {
+            long now = System.currentTimeMillis();
+            if (now - lastTickWarnMs >= WARN_COOLDOWN_MS) {
+                lastTickWarnMs = now;
+                RkbClient.LOGGER.warn("[RKB-DIAG] module={} stage=tick durationMs={} thresholdMs={} ts={}",
+                        id, ns / 1_000_000L, TICK_WARN_NS / 1_000_000L, now);
+            }
         }
     }
 
@@ -254,18 +281,31 @@ public abstract class Module {
         if (!enabled || !active) {
             return;
         }
+        long t0 = System.nanoTime();
         try {
             renderHud(context, mc);
         } catch (Throwable t) {
             handleFailure("render", t);
+            return;
+        }
+        long ns = System.nanoTime() - t0;
+        if (ns >= RENDER_WARN_NS) {
+            long now = System.currentTimeMillis();
+            if (now - lastRenderWarnMs >= WARN_COOLDOWN_MS) {
+                lastRenderWarnMs = now;
+                RkbClient.LOGGER.warn("[RKB-DIAG] module={} stage=render durationMs={} thresholdMs={} ts={}",
+                        id, ns / 1_000_000L, RENDER_WARN_NS / 1_000_000L, now);
+            }
         }
     }
 
     private void handleFailure(String where, Throwable t) {
         failures++;
-        RkbClient.LOGGER.error("Module '{}' failed during {} ({}/{}).", id, where, failures, MAX_FAILURES, t);
+        RkbClient.LOGGER.error("[RKB-DIAG] module={} stage={} failures={}/{} ts={} failed.",
+                id, where, failures, MAX_FAILURES, System.currentTimeMillis(), t);
         if (failures >= MAX_FAILURES) {
-            RkbClient.LOGGER.error("Disabling module '{}' after repeated failures.", id);
+            RkbClient.LOGGER.error("[RKB-DIAG] module={} stage={} action=disable reason=repeated-failures ts={}",
+                    id, where, System.currentTimeMillis());
             setEnabled(false);
         }
     }

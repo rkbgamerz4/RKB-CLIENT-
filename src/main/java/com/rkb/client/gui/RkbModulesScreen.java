@@ -1,5 +1,6 @@
 package com.rkb.client.gui;
 
+import com.rkb.client.RkbClient;
 import com.rkb.client.config.ConfigManager;
 import com.rkb.client.config.Favorites;
 import com.rkb.client.input.KeyUtil;
@@ -42,6 +43,14 @@ public class RkbModulesScreen extends Screen {
     private float scroll;
     private int contentH;
     private String listening = null; // moduleId:settingId or moduleId:key
+    // Diagnostic state (no per-frame logging)
+    private int diagLastW = -1, diagLastH = -1;
+    private double diagLastScale = -1;
+    private int diagLastFbW = -1, diagLastFbH = -1;
+    private String diagLastLayout = "";
+    private String diagFilterRow = "null";
+    private String diagGrid = "null";
+    private String diagClose = "null";
 
     public RkbModulesScreen() { super(Text.literal("RKB Modules")); }
 
@@ -52,6 +61,13 @@ public class RkbModulesScreen extends Screen {
         search.setMaxLength(64);
         search.setPlaceholder(Text.literal("Search modules..."));
         addDrawableChild(search);
+        logDiag("open/init");
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        super.resize(width, height);
+        logDiag("resize");
     }
 
     @Override
@@ -59,6 +75,7 @@ public class RkbModulesScreen extends Screen {
 
     @Override
     public void close() {
+        logDiag("close");
         ConfigManager.save();
         MinecraftClient.getInstance().setScreen(null);
     }
@@ -135,10 +152,10 @@ public class RkbModulesScreen extends Screen {
         // Header: red logo badge + spacer + close
         int hx = panel.x() + pad;
         int hy = panel.y() + pad;
-        RkbUi.Rect logo = new RkbUi.Rect(hx, hy, 142, 34);
+        RkbUi.Rect logo = new RkbUi.Rect(hx, hy, Math.min(142, panel.width() - pad * 2 - 40), 34);
         ctx.fill(logo.x(), logo.y(), logo.right(), logo.bottom(), 0xFFE33342);
         drawBorder(ctx, logo, 0xFFB32632);
-        ctx.drawText(tr, RkbUi.menuText("\u25A6 RKB MOD MENU"), logo.x() + 10, logo.y() + 13, 0xFFFFFFFF, false);
+        ctx.drawText(tr, RkbUi.menuText(RkbUi.fit(tr, "[R] RKB MOD MENU", logo.width() - 12)), logo.x() + 8, logo.y() + 13, 0xFFFFFFFF, false);
         hits.add(new Hit(logo, () -> { detail = null; scroll = 0; filter = null; favoritesOnly = false; }));
 
         RkbUi.Rect close = new RkbUi.Rect(panel.right() - pad - 32, hy + 2, 32, 30);
@@ -147,11 +164,19 @@ public class RkbModulesScreen extends Screen {
         drawBorder(ctx, close, 0xFF6C2734);
         ctx.drawText(tr, "x", close.x() + 12, close.y() + 10, 0xFFE15A67, false);
         hits.add(new Hit(close, this::close));
+        diagClose = close.toString();
 
-        // Filters row
+        // Filters row (responsive: wraps/search moves down on small widths)
         int fy = hy + 44;
         int chipH = 28;
         int chipGap = 6;
+        int rightCtl0 = panel.right() - pad;
+        int controlsW = 28 + 6 + 28 + 8; // view + fav + gaps
+        int searchMin = 90;
+        int availableSearch = rightCtl0 - hx - controlsW - searchMin - 8;
+        boolean searchBelow = availableSearch < 120;
+        int chipRightLimit = searchBelow ? (rightCtl0 - controlsW) : (rightCtl0 - controlsW - searchMin - 8);
+
         int cxChip = hx;
         cxChip = drawFilterChip(ctx, tr, "All", cxChip, fy, chipH, filter == null && !favoritesOnly,
                 () -> { filter = null; favoritesOnly = false; scroll = 0; }, mx, my) + chipGap;
@@ -159,31 +184,44 @@ public class RkbModulesScreen extends Screen {
             if (cat.isPage()) continue;
             String label = cat.label();
             int cw = tr.getWidth(label) + 28;
-            if (cxChip + cw > panel.right() - pad - 220) break; // keep row compact; rest accessible via All/search
+            if (cxChip + cw > chipRightLimit) {
+                if (searchBelow) {
+                    fy += chipH + 6;
+                    cxChip = hx;
+                    chipRightLimit = rightCtl0 - controlsW;
+                } else {
+                    break;
+                }
+            }
             cxChip = drawFilterChip(ctx, tr, label, cxChip, fy, chipH, filter == cat && !favoritesOnly,
                     () -> { filter = cat; favoritesOnly = false; scroll = 0; }, mx, my) + chipGap;
         }
 
-        // Right controls: search, favorites heart, view indicator
-        int rightCtl = panel.right() - pad;
-        RkbUi.Rect viewBtn = new RkbUi.Rect(rightCtl - 28, fy, 28, 28);
-        drawIconButton(ctx, tr, viewBtn, "\u25A6", false, mx, my);
-        rightCtl = viewBtn.x() - 6;
-        RkbUi.Rect favBtn = new RkbUi.Rect(rightCtl - 28, fy, 28, 28);
-        drawIconButton(ctx, tr, favBtn, "\u2665", favoritesOnly, mx, my);
+        RkbUi.Rect viewBtn = new RkbUi.Rect(panel.right() - pad - 28, fy, 28, 28);
+        drawIconButton(ctx, tr, viewBtn, "#", false, mx, my);
+        RkbUi.Rect favBtn = new RkbUi.Rect(viewBtn.x() - 6 - 28, fy, 28, 28);
+        drawIconButton(ctx, tr, favBtn, favoritesOnly ? "*" : "o", favoritesOnly, mx, my);
         hits.add(new Hit(favBtn, () -> { favoritesOnly = !favoritesOnly; filter = null; scroll = 0; }));
-        rightCtl = favBtn.x() - 8;
-        int searchW = Math.max(120, Math.min(230, rightCtl - cxChip - 8));
-        search.setX(rightCtl - searchW);
-        search.setY(fy + 4);
+
+        int searchY = fy;
+        int searchRight = favBtn.x() - 8;
+        int searchLeft = searchBelow ? hx : Math.min(cxChip, searchRight - searchMin);
+        if (searchBelow) searchY = fy + chipH + 6;
+        int searchW = Math.max(80, Math.min(230, searchRight - searchLeft));
+        if (searchBelow) searchW = Math.max(80, panel.width() - pad * 2);
+        search.setX(searchBelow ? hx : searchRight - searchW);
+        search.setY(searchY + 4);
         search.setWidth(searchW);
         search.setHeight(20);
         search.visible = true;
 
         // Grid/list
-        int listY = fy + 38;
+        int listY = searchY + 38;
         RkbUi.Rect list = new RkbUi.Rect(panel.x() + pad, listY, panel.width() - pad * 2,
                 Math.max(60, panel.bottom() - pad - listY));
+        diagFilterRow = "Rect[x=" + hx + ",y=" + (hy + 44) + ",w=" + (panel.width() - pad * 2) + ",h=" + (listY - (hy + 44)) + "]";
+        diagGrid = list.toString();
+        maybeLogLayoutChange();
         ctx.enableScissor(list.x(), list.y(), list.right(), list.bottom());
         rebuildShown();
         if (detail != null) {
@@ -238,7 +276,7 @@ public class RkbModulesScreen extends Screen {
                 ctx.drawText(tr, RkbUi.menuText(name), cx + 10, cy + 10, 0xFFE0E5EE, false);
                 boolean fav = Favorites.contains(m.id());
                 RkbUi.Rect heart = new RkbUi.Rect(cx + cardW - 22, cy + 8, 14, 14);
-                ctx.drawText(tr, fav ? "\u2665" : "\u2661", heart.x(), heart.y() + 2, fav ? 0xFFDF3544 : 0xFF647187, false);
+                ctx.drawText(tr, fav ? "*" : "+", heart.x() + 2, heart.y() + 2, fav ? 0xFFDF3544 : 0xFF647187, false);
                 hits.add(new Hit(new RkbUi.Rect(heart.x() - 4, heart.y() - 4, 22, 22), () -> { Favorites.toggle(m.id()); ConfigManager.save(); }));
 
                 // center symbol
@@ -256,7 +294,7 @@ public class RkbModulesScreen extends Screen {
                 boolean cfgHover = cfg.contains(mx, my);
                 ctx.fill(cfg.x(), cfg.y(), cfg.right(), cfg.bottom(), cfgHover ? 0xFF2B374A : 0xFF202A39);
                 drawBorder(ctx, cfg, cfgHover ? 0xFF52647D : 0xFF202A39);
-                ctx.drawText(tr, "\u2699", cfg.x() + 8, cfg.y() + 7, 0xFFC4CFDF, false);
+                ctx.drawText(tr, "S", cfg.x() + 8, cfg.y() + 7, 0xFFC4CFDF, false);
                 hits.add(new Hit(cfg, () -> { detail = m; scroll = 0; }));
 
                 RkbUi.Rect tog = new RkbUi.Rect(cx + 40, cy + cardH - 30, cardW - 50, 22);
@@ -373,6 +411,44 @@ public class RkbModulesScreen extends Screen {
         ctx.fill(k, r.y() + 2, k + r.height() - 4, r.bottom() - 2, 0xFFFFFFFF);
     }
 
+
+
+    private void maybeLogLayoutChange() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        int fbW = -1, fbH = -1;
+        double scale = -1;
+        int sw = -1, sh = -1;
+        if (mc != null && mc.getWindow() != null) {
+            fbW = mc.getWindow().getFramebufferWidth();
+            fbH = mc.getWindow().getFramebufferHeight();
+            scale = mc.getWindow().getScaleFactor();
+            sw = mc.getWindow().getScaledWidth();
+            sh = mc.getWindow().getScaledHeight();
+        }
+        String layout = sw+"x"+sh+"|"+scale+"|"+fbW+"x"+fbH+"|"+width+"x"+height+"|"+diagClose+"|"+diagFilterRow+"|"+diagGrid;
+        if (!layout.equals(diagLastLayout)) {
+            diagLastLayout = layout;
+            logDiag("layout-change");
+        }
+    }
+    private void logDiag(String reason) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        int fbW = -1, fbH = -1;
+        double scale = -1;
+        int sw = -1, sh = -1;
+        if (mc != null && mc.getWindow() != null) {
+            fbW = mc.getWindow().getFramebufferWidth();
+            fbH = mc.getWindow().getFramebufferHeight();
+            scale = mc.getWindow().getScaleFactor();
+            sw = mc.getWindow().getScaledWidth();
+            sh = mc.getWindow().getScaledHeight();
+        }
+        String sidebar = shell == null ? "null" : shell.sidebar().toString();
+        String content = shell == null ? "null" : shell.content().toString();
+        String searchB = (search == null) ? "null" : ("Rect[x=" + search.getX() + ",y=" + search.getY() + ",w=" + search.getWidth() + ",h=" + search.getHeight() + "]");
+        RkbClient.LOGGER.info("[RKB-DIAG] screen=RkbModules reason={} fb={}x{} scale={} scaled={}x{} screen={}x{} sidebar={} content={} search={} filterRow={} grid={} close={}",
+                reason, fbW, fbH, scale, sw, sh, width, height, sidebar, content, searchB, diagFilterRow, diagGrid, diagClose);
+    }
     private void drawBorder(DrawContext ctx, RkbUi.Rect r, int color) {
         ctx.fill(r.x(), r.y(), r.right(), r.y() + 1, color);
         ctx.fill(r.x(), r.bottom() - 1, r.right(), r.bottom(), color);
